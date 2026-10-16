@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>悬浮控制</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+  body {
+    width: 320px;
+    height: 150px;
+    overflow: hidden;
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    -webkit-app-region: drag; /* 整个窗口可拖动 */
+  }
+  .container {
+    width: 100%;
+    height: 100%;
+    background: var(--fw-bg, rgba(30, 30, 30, 0.95));
+    border: 1px solid var(--fw-border, rgba(255, 255, 255, 0.15));
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+  .title-bar {
+    width: 100%;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    padding-top: 4px;
+  }
+  .title-text {
+    font-size: 11px;
+    color: var(--fw-text-sec, rgba(255, 255, 255, 0.5));
+    letter-spacing: 1px;
+  }
+  .close-btn {
+    -webkit-app-region: no-drag;
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 95, 87, 0.9);
+    color: rgba(0, 0, 0, 0.5);
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    transition: all 0.2s;
+  }
+  .close-btn:hover { background: rgba(255, 95, 87, 1); transform: scale(1.15); }
+
+  .info {
+    width: 100%;
+    text-align: center;
+    padding: 0 16px;
+    margin-bottom: 4px;
+  }
+  .song-name {
+    font-size: 13px;
+    color: var(--fw-text, #fff);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+  }
+  .song-status {
+    font-size: 11px;
+    color: var(--fw-text-sec, rgba(255, 255, 255, 0.4));
+    margin-top: 2px;
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 4px;
+  }
+  .ctrl-btn {
+    -webkit-app-region: no-drag;
+    width: 38px;
+    height: 38px;
+    border: none;
+    border-radius: 50%;
+    background: var(--fw-btn-bg, rgba(255, 255, 255, 0.1));
+    color: var(--fw-text, #fff);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .ctrl-btn:hover { background: var(--fw-btn-hover, rgba(255, 255, 255, 0.25)); }
+  .ctrl-btn:active { transform: scale(0.9); }
+  .ctrl-btn.play {
+    width: 46px;
+    height: 46px;
+    font-size: 20px;
+    background: var(--fw-accent, #ff6b6b);
+  }
+  .ctrl-btn.play:hover { filter: brightness(1.15); }
+
+  /* 全局快捷键开关行 */
+  .global-toggle-row {
+    width: 100%;
+    padding: 0 14px;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--fw-text, rgba(255, 255, 255, 0.75));
+    -webkit-app-region: no-drag;
+  }
+  .global-toggle-label { display: flex; align-items: center; gap: 8px; }
+  .global-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25);
+    transition: all 0.2s;
+  }
+  .global-dot.on { background: #2ecc71; box-shadow: 0 0 6px rgba(46, 204, 113, 0.8); }
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 34px;
+    height: 18px;
+  }
+  .toggle-switch input { display: none; }
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 18px;
+    transition: 0.2s;
+  }
+  .toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 12px;
+    width: 12px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: 0.2s;
+  }
+  .toggle-switch input:checked + .toggle-slider {
+    background: var(--fw-accent, #ff6b6b);
+  }
+  .toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(16px);
+  }
+</style>
+
+  <!-- ===== I18N 国际化（语言包 + 核心 + 初始化 + 主进程语言同步） ===== -->
+  <script src="./js/i18n/zh-CN.js"></script>
+  <script src="./js/i18n/en-US.js"></script>
+  <script src="./js/i18n/ja-JP.js"></script>
+  <script src="./js/i18n/ko-KR.js"></script>
+  <script src="./js/i18n/fr-FR.js"></script>
+  <script src="./js/i18n/de-DE.js"></script>
+  <script src="./js/i18n/es-ES.js"></script>
+  <script src="./js/i18n/ru-RU.js"></script>
+  <script src="./js/i18n.js"></script>
+  <script>
+    (function () {
+      function applyLang(code) {
+        try { localStorage.setItem('appLanguage', code || 'zh-CN'); } catch (_) {}
+        try {
+          if (window.I18N && typeof window.I18N.changeLanguage === 'function') {
+            window.I18N.changeLanguage(code || 'zh-CN');
+            // 子窗口启动翻译完成后立即关闭 MutationObserver，避免运行时开销
+            // （ARTNET 触发等窗口的 UDP 数据频繁修改 textContent 会触发 mutation，关闭后无此开销）
+            // 主窗口不调此函数，保留其 observer 用于自动翻译右键菜单等动态内容
+            if (typeof window.I18N.shutdownObserver === 'function') window.I18N.shutdownObserver();
+          }
+        } catch (_) {}
+      }
+      try {
+        const saved = localStorage.getItem('appLanguage') || 'zh-CN';
+        if (saved !== 'zh-CN') {
+          if (document.body) applyLang(saved);
+          else window.addEventListener('DOMContentLoaded', function () { applyLang(saved); });
+        }
+      } catch (_) {}
+      try {
+        require('electron').ipcRenderer.on('language-data', function (event, langCode) {
+          if (document.body) applyLang(langCode);
+          else window.addEventListener('DOMContentLoaded', function () { applyLang(langCode); });
+        });
+      } catch (_) {}
+    })();
+  </script>
+</head>
+<body>
+<div class="container">
+  <div class="title-bar">
+    <span class="title-text">金刚助手</span>
+    <button class="close-btn" onclick="closeWindow()">✕</button>
+  </div>
+  <div class="info">
+    <div class="song-name" id="songName">未播放</div>
+    <div class="song-status" id="songStatus">就绪</div>
+  </div>
+  <!-- 全局快捷键开关 -->
+  <div class="global-toggle-row">
+    <div class="global-toggle-label">
+      <span class="global-dot" id="gsDot"></span>
+      <span>全局快捷键</span>
+    </div>
+    <label class="toggle-switch">
+      <input type="checkbox" id="gsToggle" onchange="onGlobalShortcutToggle(this.checked)">
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+  <div class="controls">
+    <button class="ctrl-btn" onclick="sendAction('prev')" title="上一首">⏮</button>
+    <button class="ctrl-btn play" id="playBtn" onclick="togglePlay()" title="播放/暂停">▶</button>
+    <button class="ctrl-btn" onclick="sendAction('stop')" title="停止">⏹</button>
+    <button class="ctrl-btn" onclick="sendAction('next')" title="下一首">⏭</button>
+  </div>
+</div>
+
+<script>
+  const { ipcRenderer } = require('electron');
+
+  // ===== 主题应用 =====
+  const fwThemes = {
+    dark:  { bg: 'rgba(26, 26, 26, 0.95)',  border: 'rgba(255,255,255,0.15)', text: '#ffffff', textSec: 'rgba(255,255,255,0.5)',  accent: '#ff6b6b', btnBg: 'rgba(255,255,255,0.1)',  btnHover: 'rgba(255,255,255,0.25)' },
+    light: { bg: 'rgba(245, 245, 245, 0.95)', border: 'rgba(0,0,0,0.15)',     text: '#000000', textSec: 'rgba(0,0,0,0.5)',      accent: '#ff6b6b', btnBg: 'rgba(0,0,0,0.08)',       btnHover: 'rgba(0,0,0,0.18)' },
+    cute:  { bg: 'rgba(255, 240, 245, 0.95)', border: 'rgba(255,105,180,0.3)', text: '#8B4513', textSec: 'rgba(139,69,19,0.5)',   accent: '#ff6699', btnBg: 'rgba(255,105,180,0.12)', btnHover: 'rgba(255,105,180,0.25)' },
+    cool:  { bg: 'rgba(20, 25, 40, 0.95)',   border: 'rgba(255,107,53,0.3)',  text: '#ffffff', textSec: 'rgba(255,255,255,0.5)',  accent: '#ff6b35', btnBg: 'rgba(255,255,255,0.1)',  btnHover: 'rgba(255,255,255,0.25)' }
+  };
+
+  function applyFwTheme(themeName) {
+    const t = fwThemes[themeName] || fwThemes.dark;
+    const root = document.documentElement;
+    root.style.setProperty('--fw-bg', t.bg);
+    root.style.setProperty('--fw-border', t.border);
+    root.style.setProperty('--fw-text', t.text);
+    root.style.setProperty('--fw-text-sec', t.textSec);
+    root.style.setProperty('--fw-accent', t.accent);
+    root.style.setProperty('--fw-btn-bg', t.btnBg);
+    root.style.setProperty('--fw-btn-hover', t.btnHover);
+  }
+
+  // 立即应用主题（DOMContentLoaded 之前先读 localStorage）
+  try { applyFwTheme(localStorage.getItem('musicControllerTheme') || 'dark'); } catch(_) {}
+
+  // 监听主进程推送的主题变更
+  ipcRenderer.on('floating-theme', (event, themeName) => {
+    applyFwTheme(themeName);
+  });
+
+  function closeWindow() {
+    ipcRenderer.send('close-floating-window');
+  }
+
+  function sendAction(action) {
+    ipcRenderer.send('floating-' + action);
+  }
+
+  function togglePlay() {
+    ipcRenderer.send('floating-play-pause');
+    const btn = document.getElementById('playBtn');
+    // 乐观更新：切换图标（实际状态由主窗口反馈纠正）
+    btn.textContent = btn.textContent === '▶' ? '⏸' : '▶';
+  }
+
+  // ===== 全局快捷键开关 =====
+  function updateGSUI(enabled) {
+    const t = document.getElementById('gsToggle');
+    const dot = document.getElementById('gsDot');
+    if (t.checked !== !!enabled) t.checked = !!enabled;
+    dot.classList.toggle('on', !!enabled);
+  }
+
+  function onGlobalShortcutToggle(checked) {
+    // 悬浮窗切换时通知主进程 → 主进程通知主窗口 → 主窗口同步状态
+    ipcRenderer.send('floating-global-shortcut-set', !!checked);
+    // 立即更新UI（等会主窗口确认时还会再同步一次）
+    updateGSUI(!!checked);
+  }
+
+  // 接收全局快捷键状态更新（来自主窗口确认同步）
+  ipcRenderer.on('floating-global-shortcut-state', (event, data) => {
+    updateGSUI(!!data.enabled);
+  });
+
+  // 悬浮窗加载完成后，向主进程请求当前全局快捷键状态
+  window.addEventListener('DOMContentLoaded', () => {
+    ipcRenderer.send('floating-global-shortcut-request');
+  });
+
+  // 接收主窗口回传的播放状态
+  ipcRenderer.on('floating-state', (event, data) => {
+    const btn = document.getElementById('playBtn');
+    const nameEl = document.getElementById('songName');
+    const statusEl = document.getElementById('songStatus');
+    btn.textContent = data.playing ? '⏸' : '▶';
+    nameEl.textContent = data.title || '未播放';
+    statusEl.textContent = data.playing ? '播放中' : (data.title ? '已暂停' : '就绪');
+  });
+</script>
+</body>
+</html>

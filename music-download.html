@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>音乐下载 - 金刚助手</title>
+  <style>
+    :root {
+      --body: #1a1a1a;
+      --container: #2a2a2a;
+      --header: #3a3a3a;
+      --accent: #ff6b6b;
+      --text: #ffffff;
+      --textSecondary: #aaaaaa;
+      --card: #3a3a3a;
+      --cardHover: #4a4a4a;
+      --input: #4a4a4a;
+      --border: #4a4a4a;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background-color: var(--body);
+      color: var(--text);
+      font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
+      font-size: 14px;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* ===== 自定义标题栏 ===== */
+    .title-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 38px;
+      background-color: var(--container);
+      border-bottom: 1px solid var(--border);
+      -webkit-app-region: drag;
+      padding: 0 10px;
+    }
+    .title-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .title-bar-icon {
+      width: 20px; height: 20px;
+      border-radius: 4px;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: white;
+    }
+    .title-bar-text {
+      font-size: 13px;
+      font-weight: bold;
+      color: var(--text);
+    }
+    .title-bar-buttons {
+      display: flex;
+      gap: 6px;
+      -webkit-app-region: no-drag;
+    }
+    .title-btn {
+      width: 28px; height: 28px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--textSecondary);
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .title-btn:hover { background: var(--cardHover); color: var(--text); }
+    .title-btn.close:hover { background: #e53935; color: white; }
+
+    /* ===== 主容器 ===== */
+    .main-container {
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 38px);
+    }
+
+    /* ===== 搜索区域 ===== */
+    .search-area {
+      padding: 16px 20px;
+      background-color: var(--container);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .search-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .search-input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background-color: var(--input);
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.3s;
+    }
+    .search-input:focus { border-color: var(--accent); }
+    .search-input::placeholder { color: var(--textSecondary); }
+
+    select {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background-color: var(--input);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      outline: none;
+    }
+    select:hover { border-color: var(--accent); }
+
+    .btn {
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      background-color: var(--accent);
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      white-space: nowrap;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-secondary {
+      background-color: var(--card);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background-color: var(--cardHover); opacity: 1; }
+
+    /* ===== 设置行 ===== */
+    .settings-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .setting-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--textSecondary);
+    }
+    .dir-input {
+      width: 200px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background-color: var(--input);
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .browse-btn {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background-color: var(--card);
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .browse-btn:hover { background-color: var(--cardHover); }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--textSecondary);
+      cursor: pointer;
+    }
+    .checkbox-item input { cursor: pointer; accent-color: var(--accent); }
+    .group-select {
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background-color: var(--input);
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+    }
+
+    /* ===== 结果列表 ===== */
+    .results-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 20px;
+    }
+    .results-area::-webkit-scrollbar { width: 6px; }
+    .results-area::-webkit-scrollbar-track { background: transparent; }
+    .results-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .song-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      transition: background-color 0.2s;
+      cursor: default;
+    }
+    .song-item:hover { background-color: var(--card); }
+    .song-item.playing { background-color: var(--card); border-left: 3px solid var(--accent); }
+
+    .song-cover {
+      width: 48px; height: 48px;
+      border-radius: 6px;
+      background-color: var(--card);
+      flex-shrink: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .song-cover img { width: 100%; height: 100%; object-fit: cover; }
+    .song-cover-placeholder {
+      font-size: 20px;
+      color: var(--textSecondary);
+    }
+
+    .song-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .song-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .song-name {
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 250px;
+    }
+    .song-singer {
+      font-size: 13px;
+      color: var(--textSecondary);
+    }
+    .song-album-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--textSecondary);
+    }
+    .song-album {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+    .song-duration {
+      flex-shrink: 0;
+    }
+
+    .quality-tag {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    .quality-128k { background: #2e7d32; color: white; }
+    .quality-320k { background: #1565c0; color: white; }
+    .quality-flac { background: #f57f17; color: white; }
+
+    .song-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .action-btn {
+      width: 34px; height: 34px;
+      border: none;
+      border-radius: 50%;
+      background-color: var(--cardHover);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .action-btn:hover { background-color: var(--accent); color: white; }
+    .action-btn.download { background-color: var(--accent); color: white; }
+    .action-btn.download:hover { opacity: 0.8; }
+    .action-btn.downloaded { background-color: #2e7d32; }
+    .action-btn.downloading { background-color: #1565c0; }
+
+    /* ===== 状态栏 ===== */
+    .status-bar {
+      padding: 8px 20px;
+      background-color: var(--container);
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--textSecondary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .status-bar .error { color: #ef5350; }
+    .status-bar .success { color: #66bb6a; }
+
+    /* ===== 空状态 ===== */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--textSecondary);
+      gap: 12px;
+    }
+    .empty-state-icon { font-size: 48px; opacity: 0.3; }
+    .empty-state-text { font-size: 15px; }
+
+    /* ===== 加载动画 ===== */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 10px;
+      color: var(--textSecondary);
+    }
+    .spinner {
+      width: 24px; height: 24px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ===== 下载进度条 ===== */
+    .download-progress {
+      width: 60px;
+      height: 6px;
+      background-color: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .download-progress-fill {
+      height: 100%;
+      background-color: var(--accent);
+      transition: width 0.3s;
+    }
+
+    /* ===== 播放器浮条 ===== */
+    .player-bar {
+      position: absolute;
+      bottom: 36px;
+      left: 0; right: 0;
+      padding: 8px 20px;
+      background-color: var(--container);
+      border-top: 1px solid var(--border);
+      display: none;
+      align-items: center;
+      gap: 12px;
+      z-index: 100;
+    }
+    .player-bar.active { display: flex; }
+    .player-cover {
+      width: 36px; height: 36px;
+      border-radius: 4px;
+      background-color: var(--card);
+      overflow: hidden;
+    }
+    .player-cover img { width: 100%; height: 100%; object-fit: cover; }
+    .player-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .player-title {
+      font-size: 13px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .player-controls {
+      display: flex;
+      gap: 6px;
+    }
+    .player-btn {
+      width: 30px; height: 30px;
+      border: none;
+      border-radius: 50%;
+      background-color: var(--cardHover);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .player-btn:hover { background-color: var(--accent); }
+    .player-btn.stop:hover { background-color: #e53935; }
+
+    /* 音质选择菜单 */
+    .quality-menu {
+      position: fixed;
+      background-color: var(--container);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      z-index: 200;
+      padding: 4px;
+      display: none;
+    }
+    .quality-menu-item {
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      min-width: 140px;
+    }
+    .quality-menu-item:hover { background-color: var(--cardHover); }
+    .quality-menu-item .size { color: var(--textSecondary); font-size: 11px; }
+  </style>
+
+  <!-- ===== I18N 国际化（语言包 + 核心 + 初始化 + 主进程语言同步） ===== -->
+  <script src="./js/i18n/zh-CN.js"></script>
+  <script src="./js/i18n/en-US.js"></script>
+  <script src="./js/i18n/ja-JP.js"></script>
+  <script src="./js/i18n/ko-KR.js"></script>
+  <script src="./js/i18n/fr-FR.js"></script>
+  <script src="./js/i18n/de-DE.js"></script>
+  <script src="./js/i18n/es-ES.js"></script>
+  <script src="./js/i18n/ru-RU.js"></script>
+  <script src="./js/i18n.js"></script>
+  <script>
+    (function () {
+      function applyLang(code) {
+        try { localStorage.setItem('appLanguage', code || 'zh-CN'); } catch (_) {}
+        try {
+          if (window.I18N && typeof window.I18N.changeLanguage === 'function') {
+            window.I18N.changeLanguage(code || 'zh-CN');
+            // 子窗口启动翻译完成后立即关闭 MutationObserver，避免运行时开销
+            // （ARTNET 触发等窗口的 UDP 数据频繁修改 textContent 会触发 mutation，关闭后无此开销）
+            // 主窗口不调此函数，保留其 observer 用于自动翻译右键菜单等动态内容
+            if (typeof window.I18N.shutdownObserver === 'function') window.I18N.shutdownObserver();
+          }
+        } catch (_) {}
+      }
+      try {
+        const saved = localStorage.getItem('appLanguage') || 'zh-CN';
+        if (saved !== 'zh-CN') {
+          if (document.body) applyLang(saved);
+          else window.addEventListener('DOMContentLoaded', function () { applyLang(saved); });
+        }
+      } catch (_) {}
+      try {
+        require('electron').ipcRenderer.on('language-data', function (event, langCode) {
+          if (document.body) applyLang(langCode);
+          else window.addEventListener('DOMContentLoaded', function () { applyLang(langCode); });
+        });
+      } catch (_) {}
+    })();
+  </script>
+</head>
+<body>
+  <!-- 标题栏 -->
+  <div class="title-bar">
+    <div class="title-bar-left">
+      <div class="title-bar-icon">♪</div>
+      <span class="title-bar-text">音乐下载</span>
+    </div>
+    <div class="title-bar-buttons">
+      <button class="title-btn" id="minBtn" title="最小化">─</button>
+      <button class="title-btn close" id="closeBtn" title="关闭">✕</button>
+    </div>
+  </div>
+
+  <!-- 主容器 -->
+  <div class="main-container">
+    <!-- 搜索区 -->
+    <div class="search-area">
+      <div class="search-row">
+        <select id="sourceSelect">
+          <option value="kw">酷我</option>
+          <option value="kg">酷狗</option>
+          <option value="wy">网易</option>
+          <option value="tx">QQ</option>
+          <option value="mg">咪咕</option>
+        </select>
+        <input type="text" class="search-input" id="searchInput" placeholder="搜索全网歌曲...">
+        <button class="btn" id="searchBtn">搜索</button>
+      </div>
+      <div class="settings-row">
+        <div class="setting-item">
+          <span>保存到</span>
+          <input type="text" class="dir-input" id="downloadDir" readonly placeholder="选择下载目录...">
+          <button class="browse-btn" id="browseBtn">浏览</button>
+        </div>
+        <label class="checkbox-item">
+          <input type="checkbox" id="autoAddCheckbox">
+          <span>下载后自动添加到分组</span>
+        </label>
+        <select class="group-select" id="groupSelect" style="display:none;">
+          <option value="-1">选择分组</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 结果列表 -->
+    <div class="results-area" id="resultsArea">
+      <div class="empty-state">
+        <div class="empty-state-icon">🎵</div>
+        <div class="empty-state-text">输入关键词开始搜索全网音乐</div>
+      </div>
+    </div>
+
+    <!-- 播放器浮条 -->
+    <div class="player-bar" id="playerBar">
+      <div class="player-cover" id="playerCover"></div>
+      <div class="player-info">
+        <div class="player-title" id="playerTitle">未播放</div>
+      </div>
+      <div class="player-controls">
+        <button class="player-btn" id="playerPlayPause">⏸</button>
+        <button class="player-btn stop" id="playerStop">⏹</button>
+      </div>
+    </div>
+
+    <!-- 状态栏 -->
+    <div class="status-bar" id="statusBar">
+      <span id="statusText">就绪</span>
+      <span id="apiStatus"></span>
+    </div>
+  </div>
+
+  <!-- 音质选择菜单 -->
+  <div class="quality-menu" id="qualityMenu"></div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    // ===== 状态 =====
+    let currentTheme = 'dark';
+    let themes = {
+      dark: { body: '#1a1a1a', container: '#2a2a2a', header: '#3a3a3a', accent: '#ff6b6b', text: '#ffffff', textSecondary: '#aaaaaa', card: '#3a3a3a', cardHover: '#4a4a4a', input: '#4a4a4a', border: '#4a4a4a' },
+      light: { body: '#f5f5f5', container: '#ffffff', header: '#f0f0f0', accent: '#ff6b6b', text: '#000000', textSecondary: '#333333', card: '#f0f0f0', cardHover: '#e0e0e0', input: '#e0e0e0', border: '#e0e0e0' },
+      cute: { body: '#ffe6f2', container: '#ffffff', header: '#ffccdd', accent: '#ff6699', text: '#000000', textSecondary: '#333333', card: '#ffeeee', cardHover: '#ffdddd', input: '#ffeeee', border: '#ffccdd' },
+      cool: { body: '#1a1a1a', container: '#2a2a2a', header: '#3a3a3a', accent: '#ff6b35', text: '#ffffff', textSecondary: '#e0e0e0', card: '#3a3a3a', cardHover: '#4a4a4a', input: '#4a4a4a', border: '#ff6b35' }
+    };
+
+    let searchResults = [];
+    let audioPlayer = null;
+    let currentPlayingId = null;
+    let downloadDir = localStorage.getItem('musicDownloadDir') || '';
+    let downloadingSongs = new Set(); // 正在下载的歌曲ID
+    let downloadedSongs = new Set();  // 已下载的歌曲ID
+    let debounceTimer = null;
+    let apiBase = 'http://localhost:3100';
+
+    // ===== 主题应用 =====
+    function applyTheme(themeName) {
+      const theme = themes[themeName] || themes.dark;
+      const root = document.documentElement;
+      root.style.setProperty('--body', theme.body);
+      root.style.setProperty('--container', theme.container);
+      root.style.setProperty('--header', theme.header);
+      root.style.setProperty('--accent', theme.accent);
+      root.style.setProperty('--text', theme.text);
+      root.style.setProperty('--textSecondary', theme.textSecondary);
+      root.style.setProperty('--card', theme.card);
+      root.style.setProperty('--cardHover', theme.cardHover);
+      root.style.setProperty('--input', theme.input);
+      root.style.setProperty('--border', theme.border);
+    }
+
+    // 接收主窗口传来的主题
+    ipcRenderer.on('theme-data', (event, themeName) => {
+      currentTheme = themeName;
+      applyTheme(themeName);
+    });
+
+    // 默认应用主题
+    const savedTheme = localStorage.getItem('musicControllerTheme') || 'dark';
+    applyTheme(savedTheme);
+
+    // ===== 窗口控制 =====
+    document.getElementById('minBtn').addEventListener('click', () => {
+      ipcRenderer.send('minimize-music-download');
+    });
+    document.getElementById('closeBtn').addEventListener('click', () => {
+      stopPreview();
+      ipcRenderer.send('close-music-download');
+    });
+
+    // ===== 下载目录选择 =====
+    document.getElementById('browseBtn').addEventListener('click', () => {
+      ipcRenderer.send('select-download-dir');
+    });
+    ipcRenderer.on('download-dir-selected', (event, dir) => {
+      downloadDir = dir;
+      document.getElementById('downloadDir').value = dir;
+      localStorage.setItem('musicDownloadDir', dir);
+    });
+
+    // 恢复上次目录
+    if (downloadDir) {
+      document.getElementById('downloadDir').value = downloadDir;
+    }
+
+    // ===== 自动添加到分组 =====
+    const autoAddCheckbox = document.getElementById('autoAddCheckbox');
+    const groupSelect = document.getElementById('groupSelect');
+    autoAddCheckbox.addEventListener('change', () => {
+      if (autoAddCheckbox.checked) {
+        groupSelect.style.display = '';
+        loadGroups();
+      } else {
+        groupSelect.style.display = 'none';
+      }
+    });
+
+    function loadGroups() {
+      ipcRenderer.send('get-groups-for-download');
+      ipcRenderer.on('groups-data', (event, groups) => {
+        groupSelect.innerHTML = '<option value="-1">' + I18N.t('选择分组') + '</option>';
+        groups.forEach(g => {
+          const opt = document.createElement('option');
+          opt.value = g.index;
+          opt.textContent = g.name;
+          groupSelect.appendChild(opt);
+        });
+      });
+    }
+
+    // ===== 搜索 =====
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const sourceSelect = document.getElementById('sourceSelect');
+
+    // 恢复上次平台选择
+    const savedSource = localStorage.getItem('musicDownloadSource');
+    if (savedSource) sourceSelect.value = savedSource;
+    sourceSelect.addEventListener('change', () => {
+      localStorage.setItem('musicDownloadSource', sourceSelect.value);
+    });
+
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => doSearch(), 500);
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        clearTimeout(debounceTimer);
+        doSearch();
+      }
+    });
+
+    searchBtn.addEventListener('click', () => {
+      clearTimeout(debounceTimer);
+      doSearch();
+    });
+
+    async function doSearch() {
+      const keyword = searchInput.value.trim();
+      if (!keyword) return;
+
+      const source = sourceSelect.value;
+      const resultsArea = document.getElementById('resultsArea');
+      resultsArea.innerHTML = '<div class="loading"><div class="spinner"></div>' + I18N.t('搜索中...') + '</div>';
+      setStatus(I18N.t('正在从') + ' ' + sourceSelect.options[sourceSelect.selectedIndex].text + ' ' + I18N.t('搜索...'), '');
+
+      try {
+        const response = await fetch(apiBase + '/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source, keyword, page: 1, limit: 30 }),
+          signal: AbortSignal.timeout(10000)
+        });
+
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status);
+        }
+
+        const data = await response.json();
+
+        if (data.code !== 200) {
+          const errorMsg = formatSearchError(data.code, sourceSelect.options[sourceSelect.selectedIndex].text);
+          resultsArea.innerHTML = '<div class="empty-state"><div class="empty-state-icon">😕</div><div class="empty-state-text">' + errorMsg + '</div></div>';
+          setStatus(errorMsg, 'error');
+          return;
+        }
+
+        searchResults = data.data.list || [];
+        renderResults(searchResults);
+        const count = searchResults.length;
+        const total = data.data.total || count;
+        setStatus(I18N.t('在') + ' ' + sourceSelect.options[sourceSelect.selectedIndex].text + ' ' + I18N.t('找到') + ' ' + total + ' ' + I18N.t('首歌曲'), 'success');
+
+      } catch (error) {
+        let errorMsg;
+        if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+          errorMsg = I18N.t('搜索超时，请检查网络连接或 API 地址');
+        } else if (error.message.includes('Failed to fetch') || error.message.includes('ECONNREFUSED')) {
+          errorMsg = I18N.t('无法连接到 API 服务，请确认 lx-music-source 已启动 (localhost:3100)');
+        } else {
+          errorMsg = I18N.t('搜索失败：') + error.message;
+        }
+        resultsArea.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📡</div><div class="empty-state-text">' + errorMsg + '</div></div>';
+        setStatus(errorMsg, 'error');
+      }
+    }
+
+    function formatSearchError(code, platformName) {
+      switch (code) {
+        case 400: return I18N.t('参数错误，请检查搜索关键词');
+        case 500: return I18N.t('服务异常，请稍后重试');
+        case 502: return platformName + I18N.t('暂时不可用，建议切换其他平台');
+        default: return I18N.t('搜索失败，错误码：') + code;
+      }
+    }
+
+    // ===== 渲染搜索结果 =====
+    function renderResults(songs) {
+      const resultsArea = document.getElementById('resultsArea');
+
+      if (!songs || songs.length === 0) {
+        resultsArea.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-text">' + I18N.t('未找到相关歌曲，试试其他关键词或平台') + '</div></div>';
+        return;
+      }
+
+      resultsArea.innerHTML = '';
+      songs.forEach((song, index) => {
+        const songId = index;
+        const item = document.createElement('div');
+        item.className = 'song-item';
+        item.dataset.songId = songId;
+
+        // 封面
+        const cover = document.createElement('div');
+        cover.className = 'song-cover';
+        if (song.img) {
+          const img = document.createElement('img');
+          img.src = song.img;
+          img.onerror = () => { cover.innerHTML = '<span class="song-cover-placeholder">♪</span>'; };
+          cover.appendChild(img);
+        } else {
+          cover.innerHTML = '<span class="song-cover-placeholder">♪</span>';
+        }
+
+        // 歌曲信息
+        const info = document.createElement('div');
+        info.className = 'song-info';
+
+        const titleRow = document.createElement('div');
+        titleRow.className = 'song-title-row';
+
+        const name = document.createElement('span');
+        name.className = 'song-name';
+        name.textContent = song.name || I18N.t('未知歌曲');
+
+        const singer = document.createElement('span');
+        singer.className = 'song-singer';
+        singer.textContent = song.singer || I18N.t('未知歌手');
+
+        titleRow.appendChild(name);
+        titleRow.appendChild(singer);
+
+        const albumRow = document.createElement('div');
+        albumRow.className = 'song-album-row';
+
+        const album = document.createElement('span');
+        album.className = 'song-album';
+        album.textContent = song.album || I18N.t('未知专辑');
+
+        const separator = document.createElement('span');
+        separator.textContent = '·';
+
+        const duration = document.createElement('span');
+        duration.className = 'song-duration';
+        duration.textContent = song.interval || formatDuration(song.duration);
+
+        albumRow.appendChild(album);
+        albumRow.appendChild(separator);
+        albumRow.appendChild(duration);
+
+        info.appendChild(titleRow);
+        info.appendChild(albumRow);
+
+        // 音质标签
+        if (song.quality) {
+          const bestQ = getBestQuality(song.quality);
+          if (bestQ) {
+            const qTag = document.createElement('span');
+            qTag.className = 'quality-tag quality-' + bestQ;
+            qTag.textContent = bestQ === 'flac' ? 'FLAC' : bestQ.toUpperCase();
+            titleRow.appendChild(qTag);
+          }
+        }
+
+        // 操作按钮
+        const actions = document.createElement('div');
+        actions.className = 'song-actions';
+
+        // 播放按钮
+        const playBtn = document.createElement('button');
+        playBtn.className = 'action-btn';
+        playBtn.innerHTML = '▶';
+        playBtn.title = I18N.t('试听');
+        playBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          togglePreview(songId, song);
+        });
+        actions.appendChild(playBtn);
+
+        // 下载按钮
+        const dlBtn = document.createElement('button');
+        dlBtn.className = 'action-btn download';
+        dlBtn.innerHTML = '⬇';
+        dlBtn.title = I18N.t('下载');
+        if (downloadedSongs.has(songId)) {
+          dlBtn.className = 'action-btn downloaded';
+          dlBtn.innerHTML = '✓';
+          dlBtn.title = I18N.t('已下载');
+        } else if (downloadingSongs.has(songId)) {
+          dlBtn.className = 'action-btn downloading';
+          dlBtn.innerHTML = '...';
+        }
+        dlBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (downloadingSongs.has(songId) || downloadedSongs.has(songId)) return;
+          showQualityMenu(songId, song, dlBtn);
+        });
+        actions.appendChild(dlBtn);
+
+        item.appendChild(cover);
+        item.appendChild(info);
+        item.appendChild(actions);
+        resultsArea.appendChild(item);
+      });
+    }
+
+    // ===== 音质菜单 =====
+    function showQualityMenu(songId, song, anchorBtn) {
+      const menu = document.getElementById('qualityMenu');
+      menu.innerHTML = '';
+
+      const qualities = [];
+      if (song.quality) {
+        if (song.quality['128k']) qualities.push({ key: '128k', label: I18N.t('标准 128K'), size: song.quality['128k'].size });
+        if (song.quality['320k']) qualities.push({ key: '320k', label: I18N.t('高品 320K'), size: song.quality['320k'].size });
+        if (song.quality['flac']) qualities.push({ key: 'flac', label: I18N.t('无损 FLAC'), size: song.quality['flac'].size });
+      }
+      if (qualities.length === 0) {
+        qualities.push({ key: '320k', label: I18N.t('高品 320K'), size: '' });
+        qualities.push({ key: '128k', label: I18N.t('标准 128K'), size: '' });
+      }
+
+      qualities.forEach(q => {
+        const item = document.createElement('div');
+        item.className = 'quality-menu-item';
+        item.innerHTML = '<span>' + q.label + '</span>' + (q.size ? '<span class="size">' + q.size + '</span>' : '');
+        item.addEventListener('click', () => {
+          menu.style.display = 'none';
+          startDownload(songId, song, q.key);
+        });
+        menu.appendChild(item);
+      });
+
+      const rect = anchorBtn.getBoundingClientRect();
+      menu.style.display = 'block';
+      menu.style.left = (rect.left - 100) + 'px';
+      menu.style.top = (rect.bottom + 4) + 'px';
+    }
+
+    // 点击其他地方关闭菜单
+    document.addEventListener('click', () => {
+      document.getElementById('qualityMenu').style.display = 'none';
+    });
+
+    function getBestQuality(qualities) {
+      if (qualities.flac) return 'flac';
+      if (qualities['320k']) return '320k';
+      if (qualities['128k']) return '128k';
+      return null;
+    }
+
+    // ===== 试听 =====
+    async function togglePreview(songId, song) {
+      if (currentPlayingId === songId && audioPlayer && !audioPlayer.paused) {
+        audioPlayer.pause();
+        updatePlayButton(songId, '▶');
+        document.getElementById('playerPlayPause').textContent = '▶';
+        return;
+      }
+
+      // 停止上一首
+      if (currentPlayingId !== null && currentPlayingId !== songId) {
+        updatePlayButton(currentPlayingId, '▶');
+      }
+
+      setStatus(I18N.t('获取试听链接...'), '');
+
+      try {
+        const musicInfo = {
+          name: song.name || '',
+          singer: song.singer || ''
+        };
+        if (song.hash) musicInfo.hash = song.hash;
+        if (song.songmid) musicInfo.songmid = song.songmid;
+
+        const response = await fetch(apiBase + '/musicUrl', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source: sourceSelect.value,
+            musicInfo: musicInfo,
+            type: '128k'
+          }),
+          signal: AbortSignal.timeout(10000)
+        });
+
+        const data = await response.json();
+        if (data.code !== 200 || !data.data || !data.data.url) {
+          setStatus(I18N.t('获取试听链接失败'), 'error');
+          return;
+        }
+
+        // 播放
+        if (!audioPlayer) {
+          audioPlayer = new Audio();
+          audioPlayer.addEventListener('ended', () => {
+            updatePlayButton(currentPlayingId, '▶');
+            document.getElementById('playerPlayPause').textContent = '▶';
+          });
+        }
+
+        audioPlayer.src = data.data.url;
+        audioPlayer.play().catch(err => {
+          setStatus(I18N.t('播放失败：') + err.message, 'error');
+        });
+
+        currentPlayingId = songId;
+        updatePlayButton(songId, '⏸');
+
+        // 更新播放器浮条
+        const playerBar = document.getElementById('playerBar');
+        playerBar.classList.add('active');
+        document.getElementById('playerTitle').textContent = song.name + ' - ' + song.singer;
+        const playerCover = document.getElementById('playerCover');
+        if (song.img) {
+          playerCover.innerHTML = '<img src="' + song.img + '">';
+        }
+
+        setStatus(I18N.t('正在试听：') + song.name, '');
+
+      } catch (error) {
+        setStatus(I18N.t('试听失败：') + error.message, 'error');
+      }
+    }
+
+    function stopPreview() {
+      if (audioPlayer) {
+        audioPlayer.pause();
+        audioPlayer.src = '';
+        if (currentPlayingId !== null) {
+          updatePlayButton(currentPlayingId, '▶');
+        }
+        document.getElementById('playerBar').classList.remove('active');
+        currentPlayingId = null;
+      }
+    }
+
+    function updatePlayButton(songId, icon) {
+      const items = document.querySelectorAll('.song-item');
+      items.forEach(item => {
+        if (parseInt(item.dataset.songId) === songId) {
+          const btn = item.querySelector('.action-btn');
+          if (btn && !btn.classList.contains('download') && !btn.classList.contains('downloaded') && !btn.classList.contains('downloading')) {
+            btn.innerHTML = icon;
+          }
+          if (icon === '⏸') {
+            item.classList.add('playing');
+          } else {
+            item.classList.remove('playing');
+          }
+        }
+      });
+    }
+
+    // 播放器控制
+    document.getElementById('playerPlayPause').addEventListener('click', () => {
+      if (audioPlayer) {
+        if (audioPlayer.paused) {
+          audioPlayer.play();
+          document.getElementById('playerPlayPause').textContent = '⏸';
+          if (currentPlayingId !== null) updatePlayButton(currentPlayingId, '⏸');
+        } else {
+          audioPlayer.pause();
+          document.getElementById('playerPlayPause').textContent = '▶';
+          if (currentPlayingId !== null) updatePlayButton(currentPlayingId, '▶');
+        }
+      }
+    });
+    document.getElementById('playerStop').addEventListener('click', () => {
+      stopPreview();
+    });
+
+    // ===== 下载 =====
+    async function startDownload(songId, song, quality) {
+      if (!downloadDir) {
+        setStatus(I18N.t('请先选择下载目录'), 'error');
+        return;
+      }
+
+      downloadingSongs.add(songId);
+      updateDownloadButton(songId, 'downloading');
+      setStatus(I18N.t('获取下载链接...'), '');
+
+      try {
+        const musicInfo = {
+          name: song.name || '',
+          singer: song.singer || ''
+        };
+        if (song.hash) musicInfo.hash = song.hash;
+        if (song.songmid) musicInfo.songmid = song.songmid;
+
+        const response = await fetch(apiBase + '/musicUrl', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source: sourceSelect.value,
+            musicInfo: musicInfo,
+            type: quality
+          }),
+          signal: AbortSignal.timeout(15000)
+        });
+
+        const data = await response.json();
+        if (data.code !== 200 || !data.data || !data.data.url) {
+          throw new Error(I18N.t('获取下载链接失败') + ' (code:' + data.code + ')');
+        }
+
+        // 构建文件名
+        const ext = quality === 'flac' ? 'flac' : 'mp3';
+        const fileName = sanitizeFileName(song.singer + ' - ' + song.name) + '.' + ext;
+        const savePath = downloadDir.replace(/\//g, '\\') + '\\' + fileName;
+
+        setStatus(I18N.t('正在下载：') + song.name, '');
+
+        // 通过主进程下载
+        ipcRenderer.send('download-music-file', {
+          url: data.data.url,
+          savePath: savePath,
+          songInfo: { id: songId, name: song.name, singer: song.singer, album: song.album }
+        });
+
+      } catch (error) {
+        downloadingSongs.delete(songId);
+        updateDownloadButton(songId, 'download');
+        setStatus(I18N.t('下载失败：') + error.message, 'error');
+      }
+    }
+
+    // 下载进度
+    ipcRenderer.on('download-progress', (event, { songId, progress }) => {
+      updateDownloadProgress(songId, progress);
+    });
+
+    // 下载完成
+    ipcRenderer.on('download-complete', (event, { songId, savePath, songInfo }) => {
+      downloadingSongs.delete(songId);
+      downloadedSongs.add(songId);
+      updateDownloadButton(songId, 'downloaded');
+      setStatus(I18N.t('下载完成：') + songInfo.name + ' → ' + savePath, 'success');
+
+      // 自动添加到分组
+      if (autoAddCheckbox.checked) {
+        const groupIndex = parseInt(groupSelect.value);
+        if (groupIndex >= 0) {
+          ipcRenderer.send('add-to-group', {
+            groupIndex,
+            filePath: savePath,
+            songName: songInfo.name,
+            singer: songInfo.singer
+          });
+        }
+      }
+    });
+
+    // 下载失败
+    ipcRenderer.on('download-error', (event, { songId, error }) => {
+      downloadingSongs.delete(songId);
+      updateDownloadButton(songId, 'download');
+      setStatus(I18N.t('下载失败：') + error, 'error');
+    });
+
+    // 添加到分组结果
+    ipcRenderer.on('add-to-group-result', (event, { success }) => {
+      if (success) {
+        setStatus(I18N.t('已自动添加到分组'), 'success');
+      } else {
+        setStatus(I18N.t('添加到分组失败'), 'error');
+      }
+    });
+
+    function updateDownloadButton(songId, state) {
+      const items = document.querySelectorAll('.song-item');
+      items.forEach(item => {
+        if (parseInt(item.dataset.songId) === songId) {
+          const btn = item.querySelector('.action-btn.download, .action-btn.downloaded, .action-btn.downloading');
+          if (btn) {
+            btn.classList.remove('download', 'downloaded', 'downloading');
+            if (state === 'download') {
+              btn.classList.add('download');
+              btn.innerHTML = '⬇';
+            } else if (state === 'downloading') {
+              btn.classList.add('downloading');
+              btn.innerHTML = '<div class="download-progress"><div class="download-progress-fill" style="width:0%"></div></div>';
+            } else if (state === 'downloaded') {
+              btn.classList.add('downloaded');
+              btn.innerHTML = '✓';
+              btn.title = I18N.t('已下载');
+            }
+          }
+        }
+      });
+    }
+
+    function updateDownloadProgress(songId, progress) {
+      const items = document.querySelectorAll('.song-item');
+      items.forEach(item => {
+        if (parseInt(item.dataset.songId) === songId) {
+          const fill = item.querySelector('.download-progress-fill');
+          if (fill) {
+            fill.style.width = progress + '%';
+          }
+        }
+      });
+      setStatus(I18N.t('下载中... ') + progress + '%', '');
+    }
+
+    // ===== 工具函数 =====
+    function formatDuration(seconds) {
+      if (!seconds || isNaN(seconds)) return '00:00';
+      const min = Math.floor(seconds / 60);
+      const sec = Math.floor(seconds % 60);
+      return String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    }
+
+    function sanitizeFileName(name) {
+      return name.replace(/[\\/:*?"<>|]/g, '_').trim();
+    }
+
+    function setStatus(text, type) {
+      const statusText = document.getElementById('statusText');
+      statusText.textContent = text;
+      statusText.className = type || '';
+    }
+
+    // 检查 API 服务状态
+    async function checkApiStatus() {
+      const apiStatusEl = document.getElementById('apiStatus');
+      try {
+        const response = await fetch(apiBase + '/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: 'kw', keyword: 'test', page: 1, limit: 1 }),
+          signal: AbortSignal.timeout(5000)
+        });
+        if (response.ok) {
+          apiStatusEl.textContent = I18N.t('● API 已连接');
+          apiStatusEl.style.color = '#66bb6a';
+        } else {
+          apiStatusEl.textContent = I18N.t('● API 异常');
+          apiStatusEl.style.color = '#ef5350';
+        }
+      } catch (error) {
+        apiStatusEl.textContent = I18N.t('● API 未连接');
+        apiStatusEl.style.color = '#ef5350';
+      }
+    }
+
+    checkApiStatus();
+  </script>
+</body>
+</html>

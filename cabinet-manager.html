@@ -1,0 +1,1819 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>电柜管理</title>
+<style>
+  /* ===== 主题变量（4 套，与主界面完全一致） ===== */
+  :root{
+    --theme-color:#ff6b6b;
+    --body-bg:#1a1a1a;
+    --container-bg:#2a2a2a;
+    --input-bg:#4a4a4a;
+    --text-color:#ffffff;
+    --text-muted:#bbbbbb;
+    --border-color:#4a4a4a;
+    --success-color:#25d366;
+    --danger-color:#e74c3c;
+    --warn-color:#f1c40f;
+    --shadow-1: 0 2px 6px rgba(0,0,0,.08);
+    --shadow-2: 0 4px 12px rgba(0,0,0,.25);
+  }
+  body[data-theme="dark"]{
+    --body-bg:#1a1a1a; --container-bg:#2a2a2a; --input-bg:#3a3a3a;
+    --text-color:#ffffff; --text-muted:#bbbbbb; --border-color:#4a4a4a;
+  }
+  body[data-theme="light"]{
+    --body-bg:#f4f4f7; --container-bg:#ffffff; --input-bg:#eaeaee;
+    --text-color:#222222; --text-muted:#666666; --border-color:#dddddd;
+    --shadow-1: 0 2px 6px rgba(0,0,0,.05); --shadow-2: 0 4px 16px rgba(0,0,0,.08);
+  }
+  body[data-theme="cute"]{
+    --body-bg:#ffe4ec; --container-bg:#fff0f5; --input-bg:#ffd3e3;
+    --text-color:#74284e; --text-muted:#a3567a; --border-color:#ffb3cd;
+    --theme-color:#ff6699;
+    --shadow-1: 0 2px 10px rgba(255,102,153,.15);
+    --shadow-2: 0 6px 20px rgba(255,102,153,.2);
+  }
+  body[data-theme="cool"]{
+    --body-bg:#0f1e2e; --container-bg:#182a3f; --input-bg:#223857;
+    --text-color:#e6f0ff; --text-muted:#8fa8c9; --border-color:#2d4568;
+    --theme-color:#ff6b35;
+    --shadow-1: 0 2px 6px rgba(0,0,0,.25);
+    --shadow-2: 0 6px 20px rgba(0,0,0,.45);
+  }
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; height:100%; width:100%; overflow:hidden; }
+  body{
+    background: var(--body-bg);
+    color: var(--text-color);
+    font-family: "Microsoft YaHei","PingFang SC","Helvetica Neue",Arial,sans-serif;
+    font-size: 14px;
+    display:flex; flex-direction:column;
+  }
+  /* ========= Header ========= */
+  .cab-header{
+    display:flex; align-items:stretch; justify-content:flex-start;
+    padding: 10px 16px; gap: 12px;
+    min-height: 120px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--container-bg);
+    flex-shrink: 0;
+  }
+  .cab-header-left{
+    display:flex; flex-direction:column; align-items:stretch; gap: 8px; flex: 1; min-width: 0;
+  }
+  .cab-toolbar{
+    display:flex; align-items:center; gap: 8px; flex-shrink: 0; flex-wrap: wrap;
+  }
+  .cab-toolbar-divider{
+    width: 1px; height: 26px; background: var(--border-color); flex-shrink: 0; margin: 0 4px;
+  }
+  .cab-cards{
+    display:flex; flex: 1 1 auto; min-height: 72px;
+    overflow-x:auto; overflow-y:hidden;
+    align-items:stretch; gap: 10px;
+    padding: 2px 0 6px;
+    scrollbar-width: thin;
+  }
+  .cab-cards::-webkit-scrollbar{ height: 8px; }
+  .cab-cards::-webkit-scrollbar-thumb{ background: var(--border-color); border-radius: 6px; }
+  .cab-card{
+    position: relative; flex: 0 0 auto; min-width: 220px; width: 220px;
+    background: var(--input-bg);
+    color: var(--text-color);
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex; flex-direction:column; align-items:stretch; justify-content:space-between;
+    cursor: pointer; user-select: none;
+    box-shadow: var(--shadow-1);
+    transition: border-color .15s, transform .12s, background .15s, box-shadow .15s;
+  }
+  .cab-card:hover{ transform: translateY(-1px); filter: brightness(1.04); }
+  .cab-card.active{
+    border-color: var(--theme-color);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-color) 30%, transparent), var(--shadow-1);
+  }
+  .cab-card.online{
+    background: linear-gradient(135deg, rgba(46,204,113,.14), rgba(46,204,113,.04));
+    border-color: rgba(46,204,113,.65);
+  }
+  .cab-card.active.online{
+    background: linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 22%, #2ecc71 10%), rgba(46,204,113,.06));
+    border-color: var(--theme-color);
+  }
+  .cab-card.offline{
+    background: linear-gradient(135deg, rgba(231,76,60,.12), rgba(231,76,60,.02));
+    border-color: rgba(231,76,60,.55);
+    border-style: dashed;
+  }
+  .cab-card.active.offline{
+    background: linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 20%, #e74c3c 8%), rgba(231,76,60,.05));
+    border-color: var(--theme-color);
+    border-style: solid;
+  }
+  .cab-card .status-badge{
+    display:inline-block; font-weight: bold; margin-right: 4px;
+  }
+  .cab-card.online  .status-badge{ color:#27ae60; }
+  .cab-card.offline .status-badge{ color:#c0392b; }
+  .cab-card .cab-card-top{
+    display:flex; align-items:flex-start; justify-content:space-between; gap: 8px;
+  }
+  .cab-card .cab-card-name{
+    font-weight: bold; font-size: 15px; line-height: 1.3;
+    word-break: break-all;
+  }
+  .cab-card .cab-card-dot{
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    background: #7f8c8d;
+    box-shadow: 0 0 0 2px rgba(0,0,0,.1);
+    margin-top: 4px;
+  }
+  .cab-card.online .cab-card-dot{ background: #2ecc71; box-shadow: 0 0 0 2px rgba(46,204,113,.3); }
+  .cab-card .cab-card-meta{
+    margin-top: 8px; font-size: 12px; color: var(--text-muted);
+    line-height: 1.55; word-break: break-all;
+  }
+  .cab-card .cab-card-meta b{ color: var(--text-color); font-weight: normal; }
+  .cab-card .cab-card-actions{
+    margin-top: 10px;
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .cab-card .cab-card-mini{
+    padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color);
+    background: rgba(255,255,255,.04); color: var(--text-color); cursor: pointer;
+    font-size: 12px; line-height: 1.1; transition: filter .12s;
+    text-align: center;
+  }
+  .cab-card .cab-card-mini:hover{ filter: brightness(1.12); }
+  .cab-card .cab-card-mini:active{ filter: brightness(.9); }
+  .cab-card .cab-card-mini.mini-seq-on{ color:#2ecc71; border-color: rgba(46,204,113,.55); }
+  .cab-card .cab-card-mini.mini-rev-on{ color:#27ae60; border-color: rgba(39,174,96,.55); }
+  .cab-card .cab-card-mini.mini-seq-off{ color:#e74c3c; border-color: rgba(231,76,60,.55); }
+  .cab-card .cab-card-mini.mini-rev-off{ color:#c0392b; border-color: rgba(192,57,43,.55); }
+  .cab-cards-empty{
+    display:flex; align-items:center; color: var(--text-muted);
+    font-size: 13px; padding: 6px 10px;
+    border: 1px dashed var(--border-color); border-radius: 8px;
+    min-height: 72px;
+  }
+  .cab-icon-btn{
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--input-bg);
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 14px;
+    transition: filter .15s;
+  }
+  .cab-icon-btn:hover{ filter: brightness(1.08); }
+  .cab-icon-btn:active{ filter: brightness(.92); }
+  .cab-action-group{
+    display:flex; flex-direction:column; gap:3px; align-items:flex-start;
+  }
+  .cab-action-group-label{
+    font-size: 11px; color: var(--text-muted); line-height:1; padding-left: 2px;
+  }
+  .cab-action-group-btns{
+    display:flex; gap:6px; align-items:center;
+  }
+  .cab-action-btn{
+    padding: 6px 10px;
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: var(--shadow-1);
+    transition: transform .15s, filter .15s;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .cab-action-btn:hover{ transform: translateY(-1px); filter: brightness(1.08); }
+  .cab-action-btn:active{ transform: translateY(0); filter: brightness(.94); }
+  .btn-seq-on{ background: var(--theme-color); }
+  .btn-rev-on{ background: #27ae60; }
+  .btn-seq-off{ background: var(--danger-color); }
+  .btn-rev-off{ background: #c0392b; }
+  /* 每路间隔输入框（位于逆关按钮后面） */
+  .cab-step-input-wrap{
+    display:flex; align-items:center; gap:4px;
+    margin-left: 4px; padding-left: 8px;
+    border-left: 1px solid var(--border-color);
+    font-size: 11px; color: var(--text-muted); line-height:1;
+  }
+  .cab-step-input-wrap label{ white-space: nowrap; cursor: pointer; }
+  .cab-step-input-wrap input[type="number"]{
+    width: 54px;
+    padding: 5px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--input-bg, #3a3a3a);
+    color: var(--text-color);
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .cab-step-input-wrap input[type="number"]:focus{ border-color: var(--theme-color); }
+  .cab-step-input-wrap input[type="number"]:disabled{ opacity:.5; cursor:not-allowed; }
+  .cab-step-input-wrap .cab-step-unit{ font-size: 11px; color: var(--text-muted); }
+
+  /* ========= Body（按钮网格） ========= */
+  .cab-body{
+    flex: 1 1 auto;
+    overflow: auto;
+    padding: 16px;
+  }
+  .cab-grid{
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 820px){
+    .cab-grid{ grid-template-columns: repeat(4, 1fr); }
+  }
+  .road-btn{
+    --road-color: var(--theme-color);
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border: 2px solid transparent;
+    border-radius: 10px;
+    padding: 8px;
+    cursor: pointer;
+    user-select: none;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center;
+    gap: 4px;
+    color: #fff;
+    background: var(--road-color);
+    filter: brightness(0.55);
+    transition: filter .15s, transform .1s, box-shadow .2s, border-color .2s;
+    box-shadow: var(--shadow-1);
+    overflow: hidden;
+  }
+  .road-btn:hover{ filter: brightness(0.7); }
+  .road-btn:active{ transform: scale(0.97); }
+  .road-btn.status-on{
+    filter: brightness(1);
+    box-shadow: 0 0 0 3px var(--road-color), 0 6px 18px rgba(0,0,0,.2);
+  }
+  .road-btn.status-timeout{
+    animation: flash-yellow 1.2s ease-in-out 0s 2;
+  }
+  @keyframes flash-yellow{
+    0%,100%{ border-color: transparent; }
+    50%{ border-color: var(--warn-color); box-shadow: 0 0 0 3px rgba(241,196,15,.4); }
+  }
+  .road-btn .road-name{
+    font-weight: bold;
+    font-size: 16px;
+    line-height: 1.2;
+    word-break: break-all;
+    max-width: 100%;
+    max-height: 60%;
+    overflow: hidden;
+    text-shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+  .road-btn .road-no{
+    font-size: 12px;
+    opacity: .85;
+    letter-spacing: 1px;
+  }
+
+  /* ========= Footer ========= */
+  .cab-footer{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 10px 16px;
+    min-height: 56px;
+    background: var(--container-bg);
+    border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
+    gap: 12px;
+  }
+  .cab-footer-left{
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  .cab-footer-right{ display:flex; gap: 10px; }
+  .cab-footer-btn{
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: filter .15s;
+  }
+  .cab-footer-btn:hover{ filter: brightness(1.08); }
+  .cab-footer-btn.cancel{
+    background: var(--input-bg);
+    color: var(--text-color);
+  }
+  .cab-footer-btn.save{
+    background: var(--theme-color);
+    color: #fff;
+    border-color: transparent;
+  }
+
+  /* ========= Toast 顶部状态提示（右上角，不挡按钮网格，最多 2 条） ========= */
+  .cab-toast-stack{
+    position: fixed; top: 14px; right: 16px;
+    display: flex; flex-direction: column; gap: 6px; z-index: 99999; pointer-events: none;
+    max-width: 420px; width: calc(100% - 32px);
+  }
+  .cab-toast{
+    padding: 6px 12px;
+    min-height: 32px; line-height: 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #fff;
+    box-shadow: var(--shadow-2);
+    animation: toastIn .2s ease both;
+    word-break: break-word;
+  }
+  .cab-toast.err{ background: var(--danger-color); }
+  .cab-toast.warn{ background: var(--warn-color); color:#333; }
+  .cab-toast.ok{ background: var(--success-color); }
+  .cab-toast.info{ background: #3498db; }
+  @keyframes toastIn{
+    from{ transform: translateY(-8px); opacity: 0; }
+    to  { transform: translateY(0); opacity: 1; }
+  }
+
+  /* ========= 弹窗 ========= */
+  .modal-overlay{
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.6);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 100000;
+  }
+  .modal-overlay.show{ display: flex; }
+  .modal-card{
+    background: var(--container-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    min-width: 380px;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: auto;
+    box-shadow: var(--shadow-2);
+  }
+  .modal-card h3{
+    margin: 0;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 16px;
+  }
+  .modal-body{ padding: 16px 18px; }
+  .modal-footer{
+    padding: 12px 18px;
+    border-top: 1px solid var(--border-color);
+    display: flex; justify-content: flex-end; gap: 10px;
+  }
+  .form-row{
+    display: flex; flex-direction: column; gap: 4px;
+    margin-bottom: 12px;
+  }
+  .form-row label{
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .form-row input, .form-row select{
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--input-bg);
+    color: var(--text-color);
+    font-size: 14px;
+    outline: none;
+  }
+  .color-presets{
+    display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px;
+    margin-top: 6px;
+  }
+  .color-presets span{
+    display: block; aspect-ratio:1; border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid var(--border-color);
+  }
+  .color-presets span.sel{
+    border-color: var(--theme-color);
+    transform: scale(1.1);
+  }
+  .empty-hint{
+    padding: 40px 10px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.8;
+  }
+  .empty-hint button{
+    margin-top: 12px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    background: var(--theme-color);
+    color: #fff;
+    cursor: pointer;
+    font-weight: bold;
+  }
+</style>
+
+  <!-- ===== I18N 国际化（语言包 + 核心 + 初始化 + 主进程语言同步） ===== -->
+  <script src="./js/i18n/zh-CN.js"></script>
+  <script src="./js/i18n/en-US.js"></script>
+  <script src="./js/i18n/ja-JP.js"></script>
+  <script src="./js/i18n/ko-KR.js"></script>
+  <script src="./js/i18n/fr-FR.js"></script>
+  <script src="./js/i18n/de-DE.js"></script>
+  <script src="./js/i18n/es-ES.js"></script>
+  <script src="./js/i18n/ru-RU.js"></script>
+  <script src="./js/i18n.js"></script>
+  <script>
+    (function () {
+      function applyLang(code) {
+        try { localStorage.setItem('appLanguage', code || 'zh-CN'); } catch (_) {}
+        try {
+          if (window.I18N && typeof window.I18N.changeLanguage === 'function') {
+            window.I18N.changeLanguage(code || 'zh-CN');
+            // 子窗口启动翻译完成后立即关闭 MutationObserver，避免运行时开销
+            // （ARTNET 触发等窗口的 UDP 数据频繁修改 textContent 会触发 mutation，关闭后无此开销）
+            // 主窗口不调此函数，保留其 observer 用于自动翻译右键菜单等动态内容
+            if (typeof window.I18N.shutdownObserver === 'function') window.I18N.shutdownObserver();
+          }
+        } catch (_) {}
+      }
+      try {
+        const saved = localStorage.getItem('appLanguage') || 'zh-CN';
+        if (saved !== 'zh-CN') {
+          if (document.body) applyLang(saved);
+          else window.addEventListener('DOMContentLoaded', function () { applyLang(saved); });
+        }
+      } catch (_) {}
+      try {
+        require('electron').ipcRenderer.on('language-data', function (event, langCode) {
+          if (document.body) applyLang(langCode);
+          else window.addEventListener('DOMContentLoaded', function () { applyLang(langCode); });
+        });
+      } catch (_) {}
+    })();
+  </script>
+</head>
+<body data-theme="dark">
+  <!-- 顶部 Toast 堆栈 -->
+  <div class="cab-toast-stack" id="cabToastStack"></div>
+
+  <!-- HEADER -->
+  <div class="cab-header">
+    <div class="cab-header-left">
+      <div class="cab-toolbar">
+        <button class="cab-icon-btn" id="btnAddCab" title="添加电柜">➕ 添加</button>
+        <button class="cab-icon-btn" id="btnEditCab" title="编辑当前电柜">⚙️ 编辑</button>
+        <button class="cab-icon-btn" id="btnDelCab" title="删除当前电柜">🗑 删除</button>
+        <button class="cab-icon-btn" id="btnQuery" title="查询设备真实状态">🔄 查状态</button>
+        <span class="cab-toolbar-divider"></span>
+        <div class="cab-action-group" title="对全部电柜执行">
+          <div class="cab-action-group-label">全部电柜</div>
+          <div class="cab-action-group-btns">
+            <button class="cab-action-btn btn-seq-on" id="btnAllSeqOn" title="按路号从小到大依次全开（全部电柜）">⚡ 顺开</button>
+            <button class="cab-action-btn btn-rev-on" id="btnAllRevOn" title="按路号从大到小逆序全开（全部电柜）">⚡ 逆开</button>
+            <button class="cab-action-btn btn-seq-off" id="btnAllSeqOff" title="按路号从小到大依次全关（全部电柜）">🛑 顺关</button>
+            <button class="cab-action-btn btn-rev-off" id="btnAllRevOff" title="按路号从大到小逆序全关（全部电柜）">🛑 逆关</button>
+            <div class="cab-step-input-wrap" title="顺开/逆开/顺关/逆关 每操作完一路后的等待时间（0.3 ~ 2 秒，默认 0.5 秒）">
+              <label for="roadStepIntervalSec">间隔</label>
+              <input type="number" id="roadStepIntervalSec" min="0.3" max="2" step="0.1" value="0.5">
+              <span class="cab-step-unit">秒</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cab-cards" id="cabCards"></div>
+    </div>
+  </div>
+
+  <!-- BODY（按钮网格，空时给引导） -->
+  <div class="cab-body" id="cabBody">
+    <div id="cabEmpty" class="empty-hint" style="display:none;">
+      还没有添加任何电柜。<br>
+      请点击上方「➕ 添加」按钮添加电柜 IP 与配置。
+      <div><button onclick="openCabinetEditorModal(null)">➕ 现在添加第一个电柜</button></div>
+    </div>
+    <div id="cabGrid" class="cab-grid"></div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="cab-footer">
+    <div class="cab-footer-left" id="cabFooterLeft">共 0 台电柜</div>
+    <div class="cab-footer-right">
+      <button class="cab-footer-btn cancel" id="btnCancel">❌ 取消</button>
+      <button class="cab-footer-btn save" id="btnSave">✅ 保存并关闭</button>
+    </div>
+  </div>
+
+  <!-- ============= 弹窗：添加/编辑电柜 ============= -->
+  <div class="modal-overlay" id="cabEditorModal">
+    <div class="modal-card" style="min-width: 440px;">
+      <h3 id="cabEditorTitle">添加电柜</h3>
+      <div class="modal-body">
+        <div class="form-row"><label>电柜名称 *</label>
+          <input id="edName" placeholder="例：1号电柜 / 舞台左 / 观众区">
+        </div>
+        <div class="form-row"><label>设备 IP 地址 *</label>
+          <input id="edIP" placeholder="例：192.168.1.100">
+        </div>
+        <div class="form-row"><label>开关数量（默认12，不可为0）</label>
+          <input id="edCount" type="number" min="1" step="1" value="12" placeholder="请输入路数">
+        </div>
+        <div class="form-row"><label>协议版本</label>
+          <select id="edProtocol" onchange="onProtocolChangeForEditor()">
+            <option value="2023">2023（新版电柜协议）</option>
+            <option value="2021">2021（硅箱协议）</option>
+            <option value="ARTNET">ARTNET（Art-Net 协议）</option>
+          </select>
+        </div>
+        <div id="rowCabNo" class="form-row"><label>电柜编号（1~255，默认1）</label>
+          <input id="edCabNo" type="number" min="1" max="255" value="1">
+        </div>
+        <div id="rowArtNet" class="form-row" style="display:none;">
+          <label>地址码（域 0~255 · 起始通道 1~512）</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input id="edArtNetUni" type="number" min="0" max="255" value="0" placeholder="域">
+            <span style="font-weight:700; color: var(--theme-color); font-size:18px;">.</span>
+            <input id="edArtNetStart" type="number" min="1" max="512" value="1" placeholder="起始通道">
+          </div>
+          <div class="tip" style="margin-top:4px;">例：第5个域，起始通道25 → 地址码 4.25</div>
+        </div>
+        <div id="rowArtNetValues" class="form-row" style="display:none;">
+          <label>开数值 / 关数值（DMX 通道值 0~255）</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input id="edArtNetOnValue" type="number" min="0" max="255" value="255" placeholder="开数值">
+            <span style="color: var(--text-secondary); font-size:14px;">开</span>
+            <span style="font-weight:700; color: var(--theme-color);">/</span>
+            <input id="edArtNetOffValue" type="number" min="0" max="255" value="0" placeholder="关数值">
+            <span style="color: var(--text-secondary); font-size:14px;">关</span>
+          </div>
+          <div class="tip" style="margin-top:4px;">模式：开数值 255，关数值 0</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="cab-footer-btn cancel" onclick="closeCabinetEditorModal()">取消</button>
+        <button class="cab-footer-btn save" onclick="confirmCabinetEditor()">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============= 弹窗：按钮属性（双击按钮） ============= -->
+  <div class="modal-overlay" id="btnPropModal">
+    <div class="modal-card" style="min-width: 400px;">
+      <h3>按钮属性</h3>
+      <div class="modal-body">
+        <div class="form-row"><label>按钮名称</label>
+          <input id="propName" placeholder="例：摇头灯 / 烟机 / 电幕">
+        </div>
+        <div class="form-row"><label>路号（1~N，默认按钮下标+1）</label>
+          <input id="propRoadNo" type="number" min="1">
+        </div>
+        <div class="form-row"><label>按钮颜色</label>
+          <input id="propColor" type="color" value="#ff6b6b">
+          <div class="color-presets" id="colorPresets"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="cab-footer-btn cancel" onclick="closeBtnPropModal()">取消</button>
+        <button class="cab-footer-btn save" onclick="confirmBtnProp()">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============= 通用确认弹窗（删除/裁剪警告） ============= -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal-card" style="min-width: 360px;">
+      <h3 id="confirmTitle">请确认</h3>
+      <div class="modal-body" id="confirmMsg" style="line-height: 1.7;"></div>
+      <div class="modal-footer">
+        <button class="cab-footer-btn cancel" onclick="closeConfirmModal(false)">取消</button>
+        <button class="cab-footer-btn save" id="confirmOkBtn" onclick="closeConfirmModal(true)">确定</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const { ipcRenderer } = require('electron');
+const LS_KEY = 'cabinetManagement.v1';
+const PRESET_COLORS = [
+  '#ff6b6b','#ff8e8e','#ff6699','#ff6b35',
+  '#f1c40f','#25d366','#3498db','#9b59b6'
+];
+
+// ======================= 状态（内存态 + 未保存草稿） =======================
+// draftConfig：窗口打开时从主进程载入（主进程持久化到 JSON 文件），编辑期间在内存修改，
+// 点「保存并关闭」写回主进程；点取消丢弃。
+let draftConfig = defaultConfig();
+// 初始主题：先按 localStorage 主界面的 theme/color 填，等 cabinet-theme-sync 过来再同步
+try{
+  const t = localStorage.getItem('musicControllerTheme') || 'dark';
+  applyThemeToWindow(t);
+}catch(_){}
+
+// runtimeStatuses[cabinetId] = [status,...]；不存盘
+let runtimeStatuses = Object.create(null);
+// 发送后无回传看门狗：key = `${cabinetId}|${road|'all'}`，存 setTimeout id
+let noReplyWatches = Object.create(null);
+// 乐观更新后是否真的收到过设备回传：同一 key ，存 true/false（避免把UI主动改的误认为回传）
+let replyReceivedFlags = Object.create(null);
+// 乐观保护锁：key = 同上，value = { expect:0|1, expireAt:ms }。保护窗口内，与 expect 相反的回传直接忽略
+let optimisticLocks = Object.create(null);
+const OPTIMISTIC_LOCK_MS = 2500;
+function clearNoReplyWatch(key){
+  try {
+    if (noReplyWatches[key]) { clearTimeout(noReplyWatches[key]); }
+    delete noReplyWatches[key];
+  } catch(_) {}
+  try { delete replyReceivedFlags[key]; } catch(_) {}
+  try { delete optimisticLocks[key]; } catch(_) {}
+}
+// 应用回传状态前，先过乐观保护锁。返回值：是否允许写入 statuses
+function applyStatusWithLock(key, incomingVal){
+  // key 不存在或不是对象 → 无锁，直接允许
+  const lock = optimisticLocks[key];
+  if(!lock || typeof lock !== 'object') return { allow:true, acceptLock:false };
+  const now = Date.now();
+  if(now >= lock.expireAt){
+    // 保护过期 → 清锁，允许写入
+    try{ delete optimisticLocks[key]; }catch(_){}
+    return { allow:true, acceptLock:false };
+  }
+  // 保护期内
+  if(incomingVal === lock.expect){
+    // 收到了目标值回包（真实动作完成）→ 允许写入，解除锁，同时标记"已收到真实回传"
+    try{ delete optimisticLocks[key]; }catch(_){}
+    return { allow:true, acceptLock:true };
+  }
+  // 保护期内 + 回传值≠期望值（典型ACK中间态/反向包）→ 拒绝写入，保持乐观UI不变
+  return { allow:false, acceptLock:false };
+}
+// 发送成功后设置乐观值 + 保护锁（内部用）
+function setOptimistic(cabId, roadOrAll, expectVal){
+  const key = `${cabId}|${String(roadOrAll)}`;
+  // 1. 设保护锁
+  optimisticLocks[key] = { expect: expectVal, expireAt: Date.now() + OPTIMISTIC_LOCK_MS };
+  // 2. replyReceivedFlags=false（还没收到真实匹配回包）
+  replyReceivedFlags[key] = false;
+  // 3. 如果是单路，立即写 runtimeStatuses 对应位
+  if(roadOrAll !== 'all'){
+    ensureRuntimeStatuses(cabId);
+    const arr = runtimeStatuses[cabId] || [];
+    const rd = parseInt(roadOrAll,10)||0;
+    if(rd >= 1){
+      const sti = rd - 1;
+      if(sti >= 0 && sti < arr.length) arr[sti] = expectVal;
+    }
+  } else {
+    // road='all'：把所有路写为 expectVal（仅ARTNET内部用，2021/2023协议现在不走all）
+    ensureRuntimeStatuses(cabId);
+    const arr = runtimeStatuses[cabId] || [];
+    for(let i=0;i<arr.length;i++) arr[i] = expectVal;
+  }
+}
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+// 每路发送之间的间隔（秒）。默认 0.5 秒，范围 0.3 ~ 2 秒，由顶栏输入框控制。
+const ROAD_STEP_DEFAULT_SEC = 0.5;
+const ROAD_STEP_MIN_SEC = 0.3;
+const ROAD_STEP_MAX_SEC = 2;
+const ROAD_STEP_STORAGE_KEY = 'cabRoadStepIntervalSec';
+// 读取每路间隔（毫秒）：优先取输入框值，否则取 localStorage，再否则取默认值
+function getRoadStepIntervalMs(){
+  let sec = ROAD_STEP_DEFAULT_SEC;
+  const inp = document.getElementById('roadStepIntervalSec');
+  if(inp){
+    const v = parseFloat(inp.value);
+    if(!isNaN(v) && v > 0) sec = v;
+  } else {
+    try{
+      const saved = parseFloat(localStorage.getItem(ROAD_STEP_STORAGE_KEY));
+      if(!isNaN(saved) && saved > 0) sec = saved;
+    }catch(_){}
+  }
+  // 钳制到 [0.3, 2]
+  sec = Math.min(ROAD_STEP_MAX_SEC, Math.max(ROAD_STEP_MIN_SEC, sec));
+  return Math.round(sec * 1000);
+}
+// 初始化输入框值（从 localStorage 恢复） + 监听变更持久化
+function initRoadStepInput(){
+  const inp = document.getElementById('roadStepIntervalSec');
+  if(!inp) return;
+  let saved = ROAD_STEP_DEFAULT_SEC;
+  try{
+    const v = parseFloat(localStorage.getItem(ROAD_STEP_STORAGE_KEY));
+    if(!isNaN(v) && v > 0) saved = v;
+  }catch(_){}
+  saved = Math.min(ROAD_STEP_MAX_SEC, Math.max(ROAD_STEP_MIN_SEC, saved));
+  inp.value = saved;
+  const syncSave = ()=>{
+    let v = parseFloat(inp.value);
+    if(isNaN(v) || v <= 0) v = ROAD_STEP_DEFAULT_SEC;
+    v = Math.min(ROAD_STEP_MAX_SEC, Math.max(ROAD_STEP_MIN_SEC, v));
+    inp.value = v;
+    try{ localStorage.setItem(ROAD_STEP_STORAGE_KEY, String(v)); }catch(_){}
+  };
+  inp.addEventListener('change', syncSave);
+  inp.addEventListener('blur', syncSave);
+}
+
+// 当前选中的电柜（卡片布局选中）
+let activeCabinetId = (draftConfig && draftConfig.activeCabinetId) || null;
+
+// 在线状态（心跳 ping 回来）
+let runtimeOnline = Object.create(null); // { cabId: true|false }
+let heartbeatTimer = null;               // 15s 心跳定时器（onCancel / onSaveAndClose 时清掉）
+
+// 编辑态（添加/编辑电柜/按钮属性）临时数据
+let editorTemp = null; // { mode:'add'|'edit', editId? }
+let propTemp = null;   // { cabinetId, btnIdx }
+let confirmCb = null;  // confirmModal 结果回调
+
+// 主进程 socket 状态（get-config 返回）
+let socketMeta = { socketBound:false, bindConflict:false };
+
+init();
+
+// ======================= 初始化 =======================
+async function init(){
+  // 1) 主进程：拿 socket 状态 + 已保存的配置（主进程持久化到 JSON 文件，跨窗口生命周期保留）
+  try{
+    const r = await ipcRenderer.invoke('cabinet:get-config');
+    if(r && typeof r === 'object'){
+      socketMeta = r;
+      if(r.config && typeof r.config === 'object' && Array.isArray(r.config.cabinets)){
+        draftConfig = r.config;
+      }
+    }
+  }catch(_){}
+
+  // 2) 把配置先 save-config 一次给主进程（用于匹配 cabinetId/编号/IP）
+  try{ await ipcRenderer.invoke('cabinet:save-config', clone(draftConfig)); }catch(_){}
+
+  // 2.1) ARTNET协议：检查是否有ARTNET电柜，若有则通知主进程禁用窗口状态记忆
+  checkArtNetAndSyncWindowState();
+
+  // 3) 选中电柜
+  ensureActiveCabinetId();
+
+  // 4) 渲染
+  renderCabinetCards();
+  renderBody();
+  renderFooter();
+
+  // 5) 颜色预设渲染
+  renderColorPresets();
+
+  // 6) Header 按钮绑定
+  document.getElementById('btnAddCab').addEventListener('click', ()=>openCabinetEditorModal(null));
+  document.getElementById('btnEditCab').addEventListener('click', ()=>{
+    if(!activeCabinetId){ toast(I18N.t('请先选中一台电柜（点左侧卡片）再编辑'),'warn'); return; }
+    openCabinetEditorModal(activeCabinetId);
+  });
+  document.getElementById('btnDelCab').addEventListener('click', onDeleteCabinet);
+  document.getElementById('btnQuery').addEventListener('click', onQueryStatus);
+  document.getElementById('btnAllSeqOn').addEventListener('click', ()=>sendGlobalAllCab('seqOn'));
+  document.getElementById('btnAllRevOn').addEventListener('click', ()=>sendGlobalAllCab('revOn'));
+  document.getElementById('btnAllSeqOff').addEventListener('click', ()=>sendGlobalAllCab('seqOff'));
+  document.getElementById('btnAllRevOff').addEventListener('click', ()=>sendGlobalAllCab('revOff'));
+  // 初始化每路间隔输入框（从 localStorage 恢复 + 监听变更持久化）
+  initRoadStepInput();
+  document.getElementById('btnCancel').addEventListener('click', onCancel);
+  document.getElementById('btnSave').addEventListener('click', onSaveAndClose);
+
+  // 7) 主进程 push 事件
+  ipcRenderer.on('cabinet-status-push', onStatusPush);
+  ipcRenderer.on('cabinet-error', (e, p)=>{
+    if(p && p.message) toast(I18N.t(p.message), (p.code && p.code.indexOf('WARN')>=0)?'warn':'err');
+  });
+  ipcRenderer.on('cabinet-info', (e, p)=>{
+    if(p && p.code==='SOCKET_READY') return; // 就绪信息默认不弹，减少打扰
+    if(p && p.message) toast(I18N.t(p.message), 'info');
+  });
+  // 主题同步
+  ipcRenderer.on('cabinet-theme-sync', (e, payload)=>{
+    if(!payload || typeof payload !== 'object') return;
+    if(typeof payload.theme === 'string' && payload.theme) applyThemeToWindow(payload.theme);
+    if(typeof payload.themeColor === 'string' && payload.themeColor){
+      document.documentElement.style.setProperty('--theme-color', payload.themeColor);
+    }
+  });
+
+  // 8) 打开后立即跑一次在线心跳（然后每 15s 一次），同时对 active 卡自动 query 状态
+  setTimeout(() => {
+    try { stopHeartbeatTimer(); } catch(_){}
+    if(activeCabinetId) onQueryStatus().catch(()=>{});
+    pingAllCabinetsOnce().catch(()=>{});
+    heartbeatTimer = setInterval(()=>{ try{ pingAllCabinetsOnce(); }catch(_){} }, 15000);
+  }, 700);
+
+  // 9) 绑定失败提示
+  if(!socketMeta.socketBound || socketMeta.bindConflict){
+    setTimeout(()=>{
+      if(!socketMeta.socketBound) toast(I18N.t('UDP 2021端口未就绪，无法接收设备回传（仍可下发）'),'warn');
+    }, 800);
+  }
+}
+
+// ======================= Storage / 配置 =======================
+function defaultConfig(){
+  return { schemaVersion:1, activeCabinetId:null, cabinets:[] };
+}
+function loadConfigFromLS(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return defaultConfig();
+    const obj = JSON.parse(raw);
+    if(!obj || typeof obj !== 'object') return defaultConfig();
+    if(!Array.isArray(obj.cabinets)) obj.cabinets = [];
+    return obj;
+  }catch(_){ return defaultConfig(); }
+}
+function saveConfigToLS(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(draftConfig || defaultConfig())); return true; }
+  catch(_){ toast(I18N.t('保存失败：localStorage 写入异常'),'err'); return false; }
+}
+function clone(o){ try{ return JSON.parse(JSON.stringify(o)); }catch(_){ return {}; } }
+function uid(){ return 'cb_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4); }
+
+// ARTNET协议：检查当前draftConfig中是否存在ARTNET电柜，若有则通知主进程禁用窗口状态记忆
+function checkArtNetAndSyncWindowState(){
+  try{
+    const hasArtNet = Array.isArray(draftConfig && draftConfig.cabinets)
+      && draftConfig.cabinets.some(c => c && String(c.protocolVersion || '') === 'ARTNET');
+    ipcRenderer.send('cabinet:set-window-state-disabled', hasArtNet);
+  }catch(_){}
+}
+function currentThemeColor(){
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--theme-color');
+  return (v && v.trim()) || '#ff6b6b';
+}
+function defaultButtons(n){
+  const tc = currentThemeColor();
+  const arr = [];
+  for(let i=0;i<n;i++){
+    arr.push({ roadNo: i+1, name: I18N.t('第')+(i+1)+I18N.t('路'), color: tc });
+  }
+  return arr;
+}
+
+// ======================= Active Cabinet 工具 =======================
+function getActiveCabinet(){
+  if(!activeCabinetId) return null;
+  const list = (draftConfig && draftConfig.cabinets) || [];
+  return list.find(c=> c && c.id === activeCabinetId) || null;
+}
+function ensureActiveCabinetId(){
+  const list = (draftConfig && draftConfig.cabinets) || [];
+  if(list.length === 0){
+    activeCabinetId = null;
+    if(draftConfig) draftConfig.activeCabinetId = null;
+    return;
+  }
+  // 如果 activeCabinetId 不在列表里，就切到第一个
+  if(!activeCabinetId || !list.find(c=> c && c.id === activeCabinetId)){
+    activeCabinetId = list[0].id;
+    if(draftConfig) draftConfig.activeCabinetId = activeCabinetId;
+  }
+  ensureRuntimeStatuses(activeCabinetId);
+}
+function ensureRuntimeStatuses(cabId){
+  if(!cabId) return;
+  const cab = (draftConfig && draftConfig.cabinets || []).find(c=> c && c.id === cabId);
+  const n = cab ? (parseInt(cab.switchCount,10) || 12) : 12;
+  const proto = cab ? String(cab.protocolVersion || '2023') : '2023';
+  if(!runtimeStatuses[cabId]){
+    const arr = new Array(n);
+    for(let i=0;i<n;i++) arr[i] = -1;
+    runtimeStatuses[cabId] = arr;
+    // ARTNET：首次初始化时立刻向主进程拉取本地记忆状态（单向协议不等设备回传）
+    if(proto === 'ARTNET'){
+      (async () => {
+        try{
+          const r = await ipcRenderer.invoke('cabinet:query', cabId);
+          if(r && r.ok && Array.isArray(r.statuses)){
+            ensureRuntimeStatuses(cabId);
+            const cur = runtimeStatuses[cabId];
+            const nn = Math.min(cur.length, r.statuses.length);
+            for(let i=0;i<nn;i++){
+              const st = r.statuses[i];
+              if(st === 1 || st === 0 || st === -1) cur[i] = st;
+            }
+            renderBodyIfActive(cabId);
+          }
+        }catch(_){}
+      })();
+    }
+    return;
+  }
+  // 已有数组：只按 new length 调整，**不覆盖已有值**（否则切换柜回来第一路已开变成 -1=暗）
+  const cur = runtimeStatuses[cabId];
+  if(cur.length === n) return;
+  if(cur.length > n){
+    cur.length = n; // 收缩：直接切短
+  } else {
+    // 扩展：后面补 -1，原来前 length 位的值保留不动
+    for(let i = cur.length; i < n; i++) cur.push(-1);
+  }
+}
+
+// ======================= 主题 =======================
+function applyThemeToWindow(themeName){
+  if(!themeName) themeName = 'dark';
+  document.body.setAttribute('data-theme', themeName);
+  try{
+    const tmap = { dark:'#ff6b6b', light:'#ff6b6b', cute:'#ff6699', cool:'#ff6b35' };
+    document.documentElement.style.setProperty('--theme-color', tmap[themeName] || '#ff6b6b');
+  }catch(_){}
+}
+
+// ======================= Toast（右上角，最多保留最后 2 条，不挡按钮网格） =======================
+function toast(msg, kind){
+  const stack = document.getElementById('cabToastStack');
+  // 最多最后 2 条：已有≥2 时，从最旧（队头）开始删除直到 <2
+  while (stack && stack.children.length >= 2) {
+    try { stack.removeChild(stack.firstChild); } catch(_) { break; }
+  }
+  if (!stack) return;
+  const el = document.createElement('div');
+  el.className = 'cab-toast ' + (kind || 'info');
+  el.textContent = msg || '';
+  stack.appendChild(el);
+  setTimeout(()=>{
+    el.style.transition = 'opacity .25s';
+    el.style.opacity = '0';
+    setTimeout(()=>{ try{ if(el.parentNode) el.parentNode.removeChild(el); }catch(_){} }, 260);
+  }, 3000);
+}
+
+// ======================= 卡片布局渲染（替代原 renderHeaderSelect） =======================
+function renderCabinetCards(){
+  const wrap = document.getElementById('cabCards');
+  const list = (draftConfig && draftConfig.cabinets) || [];
+  wrap.innerHTML = '';
+  if(list.length === 0){
+    const empty = document.createElement('div');
+    empty.className = 'cab-cards-empty';
+    empty.innerHTML = I18N.t('还没有添加电柜') + ' &nbsp;→&nbsp; ' + I18N.t('点击上方') + ' <b>➕ ' + I18N.t('添加') + '</b> ' + I18N.t('开始配置');
+    wrap.appendChild(empty);
+    return;
+  }
+  list.forEach(cab => {
+    const id = cab.id;
+    const card = document.createElement('div');
+    card.className = 'cab-card';
+    if(id === activeCabinetId) card.classList.add('active');
+    const online = runtimeOnline[id] === true;
+    if(online) card.classList.add('online');
+    else {
+      // 未 ping 成功、显式 false、或 undefined（还没第一次心跳）→ 都当作"掉线"更合理；避免用户以为"没 ping 的那一小段=正常"
+      card.classList.add('offline');
+    }
+
+    const top = document.createElement('div');
+    top.className = 'cab-card-top';
+    const name = document.createElement('div');
+    name.className = 'cab-card-name';
+    name.textContent = (cab.name || I18N.t('未命名电柜'));
+    const dot = document.createElement('div');
+    dot.className = 'cab-card-dot';
+    dot.title = online ? I18N.t('设备在线（最近心跳成功）') : I18N.t('设备掉线（最近心跳失败 / 未检测到）');
+    top.appendChild(name);
+    top.appendChild(dot);
+
+    const meta = document.createElement('div');
+    meta.className = 'cab-card-meta';
+    const proto = String(cab.protocolVersion || '2023');
+    const cabNo = parseInt(cab.cabinetNo,10) || 1;
+    const cnt = parseInt(cab.switchCount,10) || 12;
+    const badgeHtml = online
+      ? '<span class="status-badge">✅ ' + I18N.t('在线') + '</span>'
+      : '<span class="status-badge">❌ ' + I18N.t('掉线') + '</span>';
+    // 协议文本
+    let protoText = I18N.t('2023 (新版电柜)');
+    if(proto === '2021') protoText = I18N.t('2021 (硅箱)');
+    else if(proto === 'ARTNET') protoText = 'ARTNET (Art-Net)';
+    // 编号/地址码
+    let addrText = '';
+    if(proto === 'ARTNET'){
+      const uni = (cab.artnetUniverse != null) ? (parseInt(cab.artnetUniverse,10)||0) : 0;
+      const sa  = (cab.artnetStartAddress != null) ? (parseInt(cab.artnetStartAddress,10)||1) : 1;
+      const onV = (cab.artnetOnValue != null) ? (parseInt(cab.artnetOnValue,10)) : 255;
+      const offV= (cab.artnetOffValue != null) ? (parseInt(cab.artnetOffValue,10)) : 0;
+      addrText = I18N.t('地址码：') + '<b>' + uni + '.' + sa + '</b>　' + I18N.t('开') + '<b>' + onV + '</b>　' + I18N.t('关') + '<b>' + offV + '</b>';
+    } else {
+      addrText = I18N.t('编号：') + '<b>#' + cabNo + '</b>';
+    }
+    meta.innerHTML = I18N.t('IP：') + '<b>' + (cab.ip || '-') + '</b>&nbsp;&nbsp;' + badgeHtml + '<br>'
+      + I18N.t('协议：') + '<b>' + protoText + '</b>'
+      + '&nbsp;&nbsp;' + addrText
+      + '&nbsp;&nbsp;' + I18N.t('路数：') + '<b>' + cnt + '</b>';
+
+    const actions = document.createElement('div');
+    actions.className = 'cab-card-actions';
+    const miniSeqOn = document.createElement('button');
+    miniSeqOn.className = 'cab-card-mini mini-seq-on';
+    miniSeqOn.type = 'button';
+    miniSeqOn.textContent = I18N.t('顺开');
+    miniSeqOn.title = I18N.t('仅本电柜：从第1路到最后一路依次全开');
+    miniSeqOn.addEventListener('click', (ev) => { ev.stopPropagation(); sendCabinetAllOneCab(id, 'seqOn'); });
+    const miniRevOn = document.createElement('button');
+    miniRevOn.className = 'cab-card-mini mini-rev-on';
+    miniRevOn.type = 'button';
+    miniRevOn.textContent = I18N.t('逆开');
+    miniRevOn.title = I18N.t('仅本电柜：从最后一路到第1路逆序全开');
+    miniRevOn.addEventListener('click', (ev) => { ev.stopPropagation(); sendCabinetAllOneCab(id, 'revOn'); });
+    const miniSeqOff = document.createElement('button');
+    miniSeqOff.className = 'cab-card-mini mini-seq-off';
+    miniSeqOff.type = 'button';
+    miniSeqOff.textContent = I18N.t('顺关');
+    miniSeqOff.title = I18N.t('仅本电柜：从第1路到最后一路依次全关');
+    miniSeqOff.addEventListener('click', (ev) => { ev.stopPropagation(); sendCabinetAllOneCab(id, 'seqOff'); });
+    const miniRevOff = document.createElement('button');
+    miniRevOff.className = 'cab-card-mini mini-rev-off';
+    miniRevOff.type = 'button';
+    miniRevOff.textContent = I18N.t('逆关');
+    miniRevOff.title = I18N.t('仅本电柜：从最后一路到第1路逆序全关');
+    miniRevOff.addEventListener('click', (ev) => { ev.stopPropagation(); sendCabinetAllOneCab(id, 'revOff'); });
+    actions.appendChild(miniSeqOn);
+    actions.appendChild(miniRevOn);
+    actions.appendChild(miniSeqOff);
+    actions.appendChild(miniRevOff);
+
+    card.appendChild(top);
+    card.appendChild(meta);
+    card.appendChild(actions);
+    card.addEventListener('click', () => selectCabinetById(id));
+    wrap.appendChild(card);
+  });
+}
+function selectCabinetById(id){
+  const list = (draftConfig && draftConfig.cabinets) || [];
+  if(!list.find(c=> c && c.id === id)) return;
+  activeCabinetId = id;
+  if(draftConfig) draftConfig.activeCabinetId = id;
+  ensureRuntimeStatuses(id);
+  renderCabinetCards();
+  renderBody();
+  renderFooter();
+}
+// 单张卡片的"单电柜全开/全关"——不影响其他电柜
+/**
+ * 单电柜 顺开/逆开/顺关/逆关
+ * @param {string} cabinetId
+ * @param {'seqOn'|'revOn'|'seqOff'|'revOff'} mode
+ */
+async function sendCabinetAllOneCab(cabinetId, mode){
+  const cab = ((draftConfig && draftConfig.cabinets) || []).find(c=> c && c.id === cabinetId);
+  if(!cab){ toast(I18N.t('电柜不存在'),'warn'); return; }
+  const proto = String(cab.protocolVersion || '2023');
+  ensureRuntimeStatuses(cabinetId);
+  const cnt = parseInt(cab.switchCount,10) || (runtimeStatuses[cabinetId]||[]).length || 12;
+  if(cnt < 1){ toast(I18N.t('该电柜路数无效'),'warn'); return; }
+
+  // 解析模式
+  const onOff = (mode==='seqOn' || mode==='revOn') ? 'on' : 'off';
+  const expectVal = onOff === 'on' ? 1 : 0;
+  const isRev = (mode==='revOn' || mode==='revOff');
+  const modeLabel = { seqOn:I18N.t('顺序全开'), revOn:I18N.t('逆序全开'), seqOff:I18N.t('顺序全关'), revOff:I18N.t('逆序全关') }[mode] || mode;
+  const roads = [];
+  if(isRev){ for(let r = cnt; r >= 1; r--) roads.push(r); }
+  else    { for(let r = 1; r <= cnt; r++)   roads.push(r); }
+
+  toast(I18N.t('开始：') + (cab.name || cabinetId) + ' → ' + modeLabel, 'info');
+  let ok = 0, fail = 0;
+  for(let idx = 0; idx < roads.length; idx++){
+    const road = roads[idx];
+    const watchKey = `${cabinetId}|${road}`;
+    clearNoReplyWatch(watchKey);
+    try{
+      const r = await ipcRenderer.invoke('cabinet:send', { cabinetId: cabinetId, road: road, action: onOff });
+      if(r && r.ok){
+        ok++;
+        // 发送成功：对这一路立刻乐观更新 + 加细粒度锁（不会被ACK反向包覆盖）
+        setOptimistic(cabinetId, road, expectVal);
+        renderBodyIfActive(cabinetId);  // 这一路立刻亮/灭 → 用户看到逐个变化
+        if(proto !== 'ARTNET'){
+          noReplyWatches[watchKey] = setTimeout(()=>{
+            if (replyReceivedFlags[watchKey] !== true) {
+              toast(I18N.t('未收到设备回传')+'（'+(cab.name||cabinetId)+' '+I18N.t('路')+road+'）：'+I18N.t('请核对配置或点「查状态」。'), 'warn');
+            }
+            clearNoReplyWatch(watchKey);
+          }, 2000);
+        }
+      } else {
+        fail++;
+        toast((cab.name||cabinetId)+' '+I18N.t('路')+road+'：'+I18N.t('发送失败')+' ' + (r && r.error || ''), 'err');
+      }
+    }catch(err){
+      fail++;
+      toast((cab.name||cabinetId)+' '+I18N.t('路')+road+'：'+I18N.t('异常')+' ' + (err && err.message || String(err)), 'err');
+    }
+    // 每路间隔：除了最后一路，都睡一下让肉眼看到逐个变化（间隔由顶栏输入框控制，默认 0.5s）
+    if(idx !== roads.length - 1){
+      await sleep(getRoadStepIntervalMs());
+    }
+  }
+  toast(modeLabel+' '+I18N.t('完成')+'（'+(cab.name||cabinetId)+'）：'+I18N.t('成功')+' '+ok+' '+I18N.t('路')+' / '+I18N.t('失败')+' '+fail+' '+I18N.t('路'), fail===0?'ok':'warn');
+}
+
+/**
+ * 全部电柜 顺开/逆开/顺关/逆关
+ * @param {'seqOn'|'revOn'|'seqOff'|'revOff'} mode
+ */
+async function sendGlobalAllCab(mode){
+  const list = (draftConfig && draftConfig.cabinets) || [];
+  if(list.length === 0){ toast(I18N.t('还没有添加任何电柜'),'warn'); return; }
+  const modeLabel = { seqOn:I18N.t('顺序全开'), revOn:I18N.t('逆序全开'), seqOff:I18N.t('顺序全关'), revOff:I18N.t('逆序全关') }[mode] || mode;
+  toast(I18N.t('开始对全部')+' '+list.length+' '+I18N.t('台电柜执行「') +modeLabel+'」...', 'info');
+  let cabOk = 0, cabFail = 0;
+  // 一台一台串行执行（每台内部逐路）——视觉上整齐，也不会UDP塞包
+  for(const cab of list){
+    if(!cab) continue;
+    try{
+      const cnt = parseInt(cab.switchCount,10) || 12;
+      const proto = String(cab.protocolVersion || '2023');
+      const onOff = (mode==='seqOn' || mode==='revOn') ? 'on' : 'off';
+      const expectVal = onOff === 'on' ? 1 : 0;
+      const isRev = (mode==='revOn' || mode==='revOff');
+      const roads = [];
+      if(isRev){ for(let r = cnt; r >= 1; r--) roads.push(r); }
+      else    { for(let r = 1; r <= cnt; r++)   roads.push(r); }
+      let oneOk=0, oneFail=0;
+      for(let idx=0; idx<roads.length; idx++){
+        const road = roads[idx];
+        const watchKey = `${cab.id}|${road}`;
+        clearNoReplyWatch(watchKey);
+        try{
+          const r = await ipcRenderer.invoke('cabinet:send', { cabinetId: cab.id, road: road, action: onOff });
+          if(r && r.ok){
+            oneOk++;
+            setOptimistic(cab.id, road, expectVal);
+            renderBodyIfActive(cab.id);
+            if(proto !== 'ARTNET'){
+              noReplyWatches[watchKey] = setTimeout(()=>{
+                if (replyReceivedFlags[watchKey] !== true) {
+                  toast(I18N.t('未收到设备回传')+'（'+(cab.name||cab.id)+' '+I18N.t('路')+road+'）：'+I18N.t('请核对配置或点「查状态」。'), 'warn');
+                }
+                clearNoReplyWatch(watchKey);
+              }, 2000);
+            }
+          } else {
+            oneFail++;
+          }
+        }catch(_){ oneFail++; }
+        if(idx !== roads.length - 1) await sleep(getRoadStepIntervalMs());
+      }
+      if(oneFail === 0) cabOk++; else cabFail++;
+    }catch(err){
+      cabFail++;
+      toast((cab.name||cab.id) + '：'+I18N.t('异常')+' ' + (err && err.message || String(err)), 'err');
+    }
+  }
+  toast(I18N.t('全部电柜「')+modeLabel+'」'+I18N.t('完成')+ '：'+I18N.t('成功')+' '+cabOk+' '+I18N.t('台')+' / '+I18N.t('失败')+' '+cabFail+' '+I18N.t('台'), cabFail===0?'ok':'warn');
+}
+function renderFooter(){
+  const list = (draftConfig && draftConfig.cabinets) || [];
+  const left = document.getElementById('cabFooterLeft');
+  const active = getActiveCabinet();
+  const onlineCount = list.reduce((acc, c)=> acc + (runtimeOnline[c && c.id] === true ? 1 : 0), 0);
+  left.textContent = I18N.t('共')+' ' + list.length + ' '+I18N.t('台电柜（在线')+' '+onlineCount+' / '+I18N.t('离线')+' ' + (list.length-onlineCount) + I18N.t('）')
+    + (active ? ('  ·  '+I18N.t('当前：') + (active.name||I18N.t('未命名')) + '  ' + (active.ip||'')) : '');
+}
+
+// ======================= 心跳：每 15 秒通过 cabinet:ping 查每个电柜 IP 是否在线（300ms 超时判离线） =======================
+async function pingAllCabinetsOnce(){
+  const list = (draftConfig && draftConfig.cabinets) || [];
+  if(list.length === 0){ renderCabinetCards(); renderFooter(); return; }
+  for(const cab of list){
+    if(!cab || !cab.id) continue;
+    let online = false;
+    try{
+      const r = await ipcRenderer.invoke('cabinet:ping', cab.id);
+      online = !!(r && r.ok && r.online === true);
+    }catch(_){ online = false; }
+    runtimeOnline[cab.id] = online;
+  }
+  renderCabinetCards();
+  renderFooter();
+}
+function stopHeartbeatTimer(){
+  try{
+    if(heartbeatTimer){ clearInterval(heartbeatTimer); heartbeatTimer = null; }
+  }catch(_){ heartbeatTimer = null; }
+}
+
+// ======================= Body（网格） =======================
+function renderBody(){
+  const cab = getActiveCabinet();
+  const empty = document.getElementById('cabEmpty');
+  const grid = document.getElementById('cabGrid');
+  if(!cab){
+    empty.style.display = '';
+    grid.innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+  ensureRuntimeStatuses(cab.id);
+  const n = parseInt(cab.switchCount,10) || 12;
+  while(cab.buttons.length < n) cab.buttons.push({ roadNo: cab.buttons.length+1, name: I18N.t('第')+(cab.buttons.length+1)+I18N.t('路'), color: currentThemeColor() });
+  if(cab.buttons.length > n) cab.buttons.length = n;
+  const statuses = runtimeStatuses[cab.id] || [];
+  grid.innerHTML = '';
+  for(let i=0;i<n;i++){
+    const bt = cab.buttons[i] || (cab.buttons[i] = { roadNo: i+1, name: I18N.t('第')+(i+1)+I18N.t('路'), color: currentThemeColor() });
+    // 状态值按『路号 - 1』对齐取（回传包 statuses[i]=路号 i+1 的状态，与设备文档一致）；避免路号≠i+1 时错取
+    const roadNoForSt = parseInt(bt.roadNo,10) || (i+1);
+    const stIdx = Math.max(0, Math.min(statuses.length-1, roadNoForSt - 1));
+    const stVal = statuses[stIdx];
+    const st = (stVal === undefined || stVal === null) ? -1 : stVal;
+    const div = document.createElement('div');
+    div.className = 'road-btn';
+    if(st === 1) div.classList.add('status-on');
+    if(st === -2) div.classList.add('status-timeout');
+    div.style.setProperty('--road-color', bt.color || '#ff6b6b');
+    div.dataset.btnIdx = i;
+    const name = document.createElement('div');
+    name.className = 'road-name';
+    name.textContent = bt.name || (I18N.t('第')+(i+1)+I18N.t('路'));
+    const no = document.createElement('div');
+    no.className = 'road-no';
+    no.textContent = 'CH.' + (parseInt(bt.roadNo,10)||(i+1));
+    div.appendChild(name);
+    div.appendChild(no);
+    div.addEventListener('click', (e)=>{ onBtnClick(i, e); });
+    div.addEventListener('dblclick', (e)=>{ e.stopPropagation(); openBtnPropModal(cab.id, i); });
+    div.addEventListener('contextmenu', (e)=>{ e.preventDefault(); e.stopPropagation(); openBtnPropModal(cab.id, i); });
+    grid.appendChild(div);
+  }
+}
+
+// ======================= 按钮单击（切换 + 发 cabinet:send） =======================
+async function onBtnClick(idx, e){
+  const cab = getActiveCabinet();
+  if(!cab) return;
+  const bt = cab.buttons[idx];
+  if(!bt) return;
+  const proto = String(cab.protocolVersion || '2023');
+  const road = parseInt(bt.roadNo,10) || (idx+1);
+  ensureRuntimeStatuses(cab.id);
+  const statuses = runtimeStatuses[cab.id] || [];
+  const stIdx = Math.max(0, Math.min(statuses.length-1, road - 1));
+  // 纯回传驱动：当前=开（1）→ 期望关；当前=关（0）或未知（-1）→ 期望开
+  const wantOn = (statuses[stIdx] === 1) ? false : true;
+  const oldVal = statuses[stIdx];   // 2 秒后用此值判定"设备是否真的回了状态"
+  const action = wantOn ? 'on' : 'off';
+  const watchKey = `${cab.id}|${road}`;
+  clearNoReplyWatch(watchKey);
+  try{
+    const r = await ipcRenderer.invoke('cabinet:send', { cabinetId: cab.id, road: road, action: action });
+    if(!r || !r.ok){
+      toast(I18N.t('指令发送失败：') + (r && r.error || I18N.t('未知原因')), 'err');
+    } else {
+      // 所有协议：发送成功后立刻乐观更新UI，并启动2.5秒保护锁（期间忽略ACK中间态反向包）
+      const expectVal = wantOn ? 1 : 0;
+      setOptimistic(cab.id, road, expectVal);
+      renderBodyIfActive(cab.id);
+      if(proto !== 'ARTNET'){
+        // 只有 2021/2023 才启动回传看门狗：如果 2 秒内 replyReceivedFlags 没被置 true → 提示用户核对
+        noReplyWatches[watchKey] = setTimeout(()=>{
+          if (replyReceivedFlags[watchKey] !== true) {
+            toast(I18N.t('未收到设备回传：请核对「协议版本/电柜编号/IP/按钮路号/接线」，或点「查状态」刷新。'), 'warn');
+          }
+          clearNoReplyWatch(watchKey);
+        }, 2000);
+      }
+    }
+  }catch(err){
+    toast(I18N.t('指令异常：') + (err && err.message || String(err)), 'err');
+  }
+}
+async function sendRoadAction(road, onOff){
+  const cab = getActiveCabinet();
+  if(!cab){ toast(I18N.t('请先选择电柜'),'warn'); return; }
+  const proto = String(cab.protocolVersion || '2023');
+  ensureRuntimeStatuses(cab.id);
+  const statuses = runtimeStatuses[cab.id] || [];
+  const oldVals = statuses.slice(); // 存发送前快照
+  const watchKey = `${cab.id}|${String(road)}`;
+  clearNoReplyWatch(watchKey);
+  try{
+    const r = await ipcRenderer.invoke('cabinet:send', { cabinetId: cab.id, road: road, action: onOff });
+    if(!r || !r.ok) toast(I18N.t('指令发送失败：') + (r && r.error || I18N.t('未知原因')), 'err');
+    else {
+      // 所有协议乐观更新 UI：立改目标值 + 保护锁
+      const expectVal = onOff === 'on' ? 1 : 0;
+      setOptimistic(cab.id, road, expectVal);
+      renderBodyIfActive(cab.id);
+      if(proto !== 'ARTNET'){
+        noReplyWatches[watchKey] = setTimeout(()=>{
+          if (replyReceivedFlags[watchKey] !== true) {
+            toast(I18N.t('未收到设备回传：请核对「协议版本/电柜编号/IP/按钮路号/接线」，或点「查状态」刷新。'), 'warn');
+          }
+          clearNoReplyWatch(watchKey);
+        }, 2000);
+      }
+    }
+  }catch(err){
+    toast(I18N.t('指令异常：') + (err && err.message || String(err)), 'err');
+  }
+}
+async function onQueryStatus(){
+  const cab = getActiveCabinet();
+  if(!cab){ toast(I18N.t('请先选择电柜'),'warn'); return; }
+  const proto = String(cab.protocolVersion || '2023');
+  try{
+    const r = await ipcRenderer.invoke('cabinet:query', cab.id);
+    if(!r || !r.ok) toast(I18N.t('查询失败：') + (r && r.error || ''), 'err');
+    else {
+      if(proto === 'ARTNET'){
+        // ARTNET：单向协议不发包，主进程直接返回本地记忆的 statuses，立刻应用
+        if(Array.isArray(r.statuses)){
+          ensureRuntimeStatuses(cab.id);
+          const arr = runtimeStatuses[cab.id] || [];
+          const n = Math.min(arr.length, r.statuses.length);
+          for(let i=0;i<n;i++){
+            const st = r.statuses[i];
+            if(st === 1 || st === 0 || st === -1) arr[i] = st;
+          }
+          clearNoReplyWatch(`${cab.id}|all`);
+          renderBodyIfActive(cab.id);
+        }
+        toast(I18N.t('ARTNET：状态已同步（本地记忆）'),'ok');
+      } else {
+        toast(I18N.t('查询指令已发送，等待设备回传...'),'info');
+      }
+    }
+  }catch(err){
+    toast(I18N.t('查询异常：') + (err && err.message || String(err)), 'err');
+  }
+}
+
+// ======================= 主进程回传状态 → 更新 UI =======================
+function onStatusPush(event, payload){
+  if(!payload || typeof payload !== 'object') return;
+  const p = payload;
+  // 支持 cabinetId 或 (cabinetNo/siliconNo + ip) 匹配
+  let targetCabId = p.cabinetId || null;
+  if(!targetCabId){
+    const cab = findCabinetFromPayload(p);
+    if(cab) targetCabId = cab.id;
+  }
+  if(!targetCabId) return;
+  // ARTNET：单向协议，所有状态完全由渲染进程本地维护（发送即更新）
+  // 忽略主进程任何推送，避免旧状态/timeout 覆盖按钮亮度导致"闪一下"
+  const targetCab = ((draftConfig && draftConfig.cabinets) || []).find(c=> c && c.id === targetCabId);
+  if(targetCab && String(targetCab.protocolVersion || '') === 'ARTNET') return;
+  ensureRuntimeStatuses(targetCabId);
+  const statuses = runtimeStatuses[targetCabId] || [];
+  const cab = ((draftConfig && draftConfig.cabinets) || []).find(c=> c && c.id === targetCabId);
+  const n = cab ? (parseInt(cab.switchCount,10)||12) : statuses.length;
+
+  if(p.type === 'timeout'){
+    // 超时：只闪黄框，不修改 status
+    if(p.road === 'all'){
+      // 查询超时：toast 一次，不闪每个按钮
+      toast(I18N.t('查询超时，请检查 IP 或网络'),'warn');
+    } else {
+      // 单路超时：如果该路存在乐观保护锁，就别闪了（保持乐观UI一致，等保护过期再决定）
+      const rd = parseInt(p.road,10) || 0;
+      const sti = (rd >= 1) ? (rd - 1) : -1;
+      if(sti >= 0 && sti < statuses.length){
+        const _key = `${targetCabId}|${rd}`;
+        const lock = optimisticLocks[_key];
+        if(!lock || Date.now() >= lock.expireAt){
+          statuses[sti] = -2;
+          setTimeout(()=>{
+            if(runtimeStatuses[targetCabId] && runtimeStatuses[targetCabId][sti] === -2){
+              runtimeStatuses[targetCabId][sti] = -1;
+              renderBodyIfActive(targetCabId);
+            }
+          }, 2400);
+        }
+      }
+    }
+    renderBodyIfActive(targetCabId);
+    return;
+  }
+
+  if(p.type === 'road'){
+    const rd = parseInt(p.road,10)||0;
+    if(rd > 0){
+      const _key = `${targetCabId}|${rd}`;
+      const sti = rd - 1;
+      const incomingVal = (p.status === 1 || p.status === 0) ? p.status : null;
+      // 先过乐观保护锁
+      let allow = true;
+      if(incomingVal !== null){
+        const lockRes = applyStatusWithLock(_key, incomingVal);
+        allow = lockRes.allow;
+        if(lockRes.acceptLock){
+          // 保护期内收到匹配目标的回包 → 确认收到真实回传
+          replyReceivedFlags[_key] = true;
+          clearNoReplyWatch(_key);
+        }
+      }
+      if(sti >= 0 && sti < statuses.length && allow){
+        // 只有被允许，才写入真实值，并确认为真实回传
+        if(incomingVal !== null){
+          statuses[sti] = incomingVal;
+          replyReceivedFlags[_key] = true;
+          clearNoReplyWatch(_key);
+        }
+        renderBodyIfActive(targetCabId);
+      }
+    }
+    return;
+  }
+  if(p.type === 'bulk'){
+    if(p.roads === 'all'){
+      const incomingVal = (p.status === 1 || p.status === 0) ? p.status : null;
+      const allKey = `${targetCabId}|all`;
+      let allowAll = true;
+      if(incomingVal !== null){
+        const lockRes = applyStatusWithLock(allKey, incomingVal);
+        allowAll = lockRes.allow;
+        if(lockRes.acceptLock){
+          replyReceivedFlags[allKey] = true;
+          clearNoReplyWatch(allKey);
+        }
+      }
+      if(allowAll){
+        // 对每一路分别也尝试过锁，精细控制（防止bulk=on而某路被用户刚刚单click=off的冲突）
+        for(let i=0;i<statuses.length;i++){
+          if(incomingVal === null) break;
+          const roadNo = i + 1;
+          const _rkey = `${targetCabId}|${roadNo}`;
+          const rr = applyStatusWithLock(_rkey, incomingVal);
+          if(rr.allow){
+            statuses[i] = incomingVal;
+            replyReceivedFlags[_rkey] = true;
+            clearNoReplyWatch(_rkey);
+          }
+          if(rr.acceptLock){
+            replyReceivedFlags[_rkey] = true;
+            clearNoReplyWatch(_rkey);
+          }
+        }
+        if(incomingVal !== null){
+          replyReceivedFlags[allKey] = true;
+          clearNoReplyWatch(allKey);
+        }
+        renderBodyIfActive(targetCabId);
+      }
+    }
+    return;
+  }
+  if(p.type === 'queryResult' && Array.isArray(p.statuses)){
+    const _key = `${targetCabId}|all`;
+    // queryResult = 主动查询结果，永远可信，清掉 all 锁
+    try { delete optimisticLocks[_key]; } catch(_){}
+    replyReceivedFlags[_key] = true;
+    clearNoReplyWatch(_key);
+    const n2 = Math.min(statuses.length, p.statuses.length);
+    for(let i=0;i<n2;i++){
+      const st = p.statuses[i];
+      const roadNo = i + 1;
+      const _rkey = `${targetCabId}|${roadNo}`;
+      // 每路再过一次锁：queryResult通常较准，但刚click了2秒内的操作也要保护用户视觉
+      let allow = true;
+      if(st === 1 || st === 0){
+        const rr = applyStatusWithLock(_rkey, st);
+        allow = rr.allow;
+        if(rr.acceptLock){
+          replyReceivedFlags[_rkey] = true;
+          clearNoReplyWatch(_rkey);
+        }
+      }
+      if(allow){
+        if(st === 1 || st === 0 || st === -1) statuses[i] = st;
+        replyReceivedFlags[_rkey] = true;
+        clearNoReplyWatch(_rkey);
+      }
+    }
+    renderBodyIfActive(targetCabId);
+    return;
+  }
+}
+function findCabinetFromPayload(p){
+  const list = (draftConfig && draftConfig.cabinets) || [];
+  return list.find(c => {
+    if(!c) return false;
+    const ipMatch = (!p.ip || !c.ip || c.ip === p.ip);
+    // 电柜编号匹配（2023 协议回传 cabinetNo；2021 协议回传 siliconNo = cabinetNo）
+    const cNo = parseInt(c.cabinetNo,10)||1;
+    const pNo = p.cabinetNo != null ? (parseInt(p.cabinetNo,10)||NaN)
+             : (p.siliconNo != null ? (parseInt(p.siliconNo,10)||NaN) : NaN);
+    const noMatch = isNaN(pNo) ? true : (cNo === pNo);
+    return ipMatch && noMatch;
+  }) || null;
+}
+function roadToBtnIdx(cabId, roadNo){
+  if(!cabId || roadNo < 1) return -1;
+  const cab = ((draftConfig && draftConfig.cabinets) || []).find(c=> c && c.id === cabId);
+  if(!cab) return -1;
+  const n = cab.buttons.length;
+  for(let i=0;i<n;i++){
+    if((parseInt(cab.buttons[i].roadNo,10)||(i+1)) === roadNo) return i;
+  }
+  return -1;
+}
+function renderBodyIfActive(cabId){
+  if(cabId === activeCabinetId){
+    renderBody();
+    renderFooter();
+  }
+}
+
+// ======================= 电柜添加/编辑/删除弹窗 =======================
+function onProtocolChangeForEditor(){
+  const proto = document.getElementById('edProtocol').value || '2023';
+  const rowCabNo = document.getElementById('rowCabNo');
+  const rowArt = document.getElementById('rowArtNet');
+  const rowArtVals = document.getElementById('rowArtNetValues');
+  if(proto === 'ARTNET'){
+    if(rowCabNo) rowCabNo.style.display = 'none';
+    if(rowArt) rowArt.style.display = '';
+    if(rowArtVals) rowArtVals.style.display = '';
+  } else {
+    if(rowCabNo) rowCabNo.style.display = '';
+    if(rowArt) rowArt.style.display = 'none';
+    if(rowArtVals) rowArtVals.style.display = 'none';
+  }
+}
+function openCabinetEditorModal(editId){
+  editorTemp = { mode: editId ? 'edit' : 'add', editId: editId || null };
+  const title = document.getElementById('cabEditorTitle');
+  if(editorTemp.mode === 'add'){
+    title.textContent = I18N.t('添加电柜');
+    document.getElementById('edName').value = '';
+    document.getElementById('edIP').value = '';
+    document.getElementById('edCount').value = '12';
+    document.getElementById('edProtocol').value = '2023';
+    document.getElementById('edCabNo').value = 1;
+    document.getElementById('edArtNetUni').value = 0;
+    document.getElementById('edArtNetStart').value = 1;
+    document.getElementById('edArtNetOnValue').value = 255;
+    document.getElementById('edArtNetOffValue').value = 0;
+  } else {
+    title.textContent = I18N.t('编辑电柜');
+    const c = (draftConfig.cabinets || []).find(x=> x && x.id === editId);
+    if(!c){ toast(I18N.t('找不到指定电柜'),'err'); return; }
+    document.getElementById('edName').value = c.name || '';
+    document.getElementById('edIP').value = c.ip || '';
+    document.getElementById('edCount').value = String(c.switchCount || 12);
+    document.getElementById('edProtocol').value = String(c.protocolVersion || '2023');
+    document.getElementById('edCabNo').value = parseInt(c.cabinetNo,10)||1;
+    document.getElementById('edArtNetUni').value = (c.artnetUniverse != null) ? (parseInt(c.artnetUniverse,10)||0) : 0;
+    document.getElementById('edArtNetStart').value = (c.artnetStartAddress != null) ? (parseInt(c.artnetStartAddress,10)||1) : 1;
+    document.getElementById('edArtNetOnValue').value = (c.artnetOnValue != null) ? (parseInt(c.artnetOnValue,10)) : 255;
+    document.getElementById('edArtNetOffValue').value = (c.artnetOffValue != null) ? (parseInt(c.artnetOffValue,10)) : 0;
+  }
+  onProtocolChangeForEditor();
+  document.getElementById('cabEditorModal').classList.add('show');
+}
+function closeCabinetEditorModal(){
+  document.getElementById('cabEditorModal').classList.remove('show');
+  editorTemp = null;
+}
+async function confirmCabinetEditor(){
+  if(!editorTemp){ closeCabinetEditorModal(); return; }
+  const name = (document.getElementById('edName').value || '').trim();
+  const ip   = (document.getElementById('edIP').value || '').trim();
+  const countRaw = document.getElementById('edCount').value;
+  const count = parseInt(countRaw,10);
+  const proto = document.getElementById('edProtocol').value || '2023';
+  if(!name){ toast(I18N.t('请输入电柜名称'),'warn'); return; }
+  if(!ip){ toast(I18N.t('请输入设备IP'),'warn'); return; }
+  if(!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip) && !/^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*$/.test(ip)){
+    // 宽松：允许域名
+  }
+  // 开关数量：不可为0，必须正整数（输入框自带min=1，再做一层兜底）
+  if(!countRaw || String(countRaw).trim() === '' || isNaN(count) || count < 1){
+    toast(I18N.t('开关数量不可为0，请输入正整数（默认12）'),'warn'); return;
+  }
+
+  // 根据协议准备地址字段
+  let cabinetNo = 1;
+  let artnetUniverse = 0;
+  let artnetStartAddress = 1;
+  let artnetOnValue = 255;
+  let artnetOffValue = 0;
+  if(proto === 'ARTNET'){
+    artnetUniverse = parseInt(document.getElementById('edArtNetUni').value,10);
+    artnetStartAddress = parseInt(document.getElementById('edArtNetStart').value,10);
+    artnetOnValue = parseInt(document.getElementById('edArtNetOnValue').value,10);
+    artnetOffValue = parseInt(document.getElementById('edArtNetOffValue').value,10);
+    if(isNaN(artnetUniverse) || !(artnetUniverse >= 0 && artnetUniverse <= 255)){
+      toast(I18N.t('地址码「域」需 0~255'),'warn'); return;
+    }
+    if(isNaN(artnetStartAddress) || !(artnetStartAddress >= 1 && artnetStartAddress <= 512)){
+      toast(I18N.t('地址码「起始通道」需 1~512'),'warn'); return;
+    }
+    if(isNaN(artnetOnValue) || !(artnetOnValue >= 0 && artnetOnValue <= 255)){
+      toast(I18N.t('开数值需 0~255'),'warn'); return;
+    }
+    if(isNaN(artnetOffValue) || !(artnetOffValue >= 0 && artnetOffValue <= 255)){
+      toast(I18N.t('关数值需 0~255'),'warn'); return;
+    }
+    // 开关数量不能超出：artnetStartAddress + count - 1 <= 512
+    if(artnetStartAddress + count - 1 > 512){
+      toast(I18N.t('起始通道 + 开关数量 - 1 不能超过 512，请减小数量或调小起始通道'),'warn'); return;
+    }
+  } else {
+    cabinetNo = parseInt(document.getElementById('edCabNo').value,10);
+    if(!(cabinetNo>=1 && cabinetNo<=255)){ toast(I18N.t('电柜编号需 1~255'),'warn'); return; }
+  }
+
+  if(editorTemp.mode === 'add'){
+    const id = uid();
+    const newCab = {
+      id,
+      name, ip,
+      switchCount: count,
+      protocolVersion: proto,
+      cabinetNo: cabinetNo,
+      artnetUniverse: artnetUniverse,
+      artnetStartAddress: artnetStartAddress,
+      artnetOnValue: artnetOnValue,
+      artnetOffValue: artnetOffValue,
+      buttons: defaultButtons(count)
+    };
+    draftConfig.cabinets = draftConfig.cabinets || [];
+    draftConfig.cabinets.push(newCab);
+    activeCabinetId = id;
+    draftConfig.activeCabinetId = id;
+    // 同步给主进程
+    try{ await ipcRenderer.invoke('cabinet:save-config', clone(draftConfig)); }catch(_){}
+    toast(I18N.t('已添加：') + name, 'ok');
+  } else {
+    // 编辑模式：要处理 switchCount 变化
+    const c = (draftConfig.cabinets || []).find(x=> x && x.id === editorTemp.editId);
+    if(!c){ closeCabinetEditorModal(); return; }
+    const oldCount = parseInt(c.switchCount,10) || 12;
+    // 调大：自动补
+    // 调小：警告 slice
+    if(count < oldCount){
+      const ok = await openConfirm(I18N.t('开关数裁剪确认'),
+        I18N.t('当前开关数')+' '+oldCount+' → '+count+'，'+I18N.t('后面')+' '+(oldCount-count)+' '+I18N.t('条按钮名称/颜色将被丢弃，是否继续？'));
+      if(!ok) return;
+    }
+    c.name = name; c.ip = ip; c.switchCount = count;
+    c.protocolVersion = proto; c.cabinetNo = cabinetNo;
+    c.artnetUniverse = artnetUniverse; c.artnetStartAddress = artnetStartAddress;
+    c.artnetOnValue = artnetOnValue; c.artnetOffValue = artnetOffValue;
+    if(count > c.buttons.length){
+      const tc = currentThemeColor();
+      while(c.buttons.length < count){
+        c.buttons.push({ roadNo: c.buttons.length+1, name: I18N.t('第')+(c.buttons.length+1)+I18N.t('路'), color: tc });
+      }
+    } else if(count < c.buttons.length){
+      c.buttons.length = count;
+    }
+    // runtime statuses 调整
+    ensureRuntimeStatuses(c.id);
+    const arr = runtimeStatuses[c.id] || [];
+    if(arr.length !== count){
+      const next = new Array(count);
+      for(let i=0;i<count;i++){ next[i] = (arr[i] === undefined) ? -1 : arr[i]; }
+      runtimeStatuses[c.id] = next;
+    }
+    try{ await ipcRenderer.invoke('cabinet:save-config', clone(draftConfig)); }catch(_){}
+    toast(I18N.t('已保存：') + name, 'ok');
+  }
+  ensureActiveCabinetId();
+  renderCabinetCards();
+  renderBody();
+  renderFooter();
+  // ARTNET：编辑完电柜后重新检查是否需要禁用窗口记忆
+  checkArtNetAndSyncWindowState();
+  closeCabinetEditorModal();
+}
+async function onDeleteCabinet(){
+  const cab = getActiveCabinet();
+  if(!cab){ toast(I18N.t('请先选中一台电柜（点左侧卡片）再删除'),'warn'); return; }
+  const ok = await openConfirm(I18N.t('删除确认'), I18N.t('确定要删除电柜「')+(cab.name||'')+I18N.t('」吗？所有按钮配置将一并清空。'));
+  if(!ok) return;
+  draftConfig.cabinets = (draftConfig.cabinets || []).filter(c=> c && c.id !== cab.id);
+  delete runtimeStatuses[cab.id];
+  delete runtimeOnline[cab.id];
+  if(draftConfig.cabinets.length === 0) activeCabinetId = null;
+  else activeCabinetId = draftConfig.cabinets[0].id;
+  draftConfig.activeCabinetId = activeCabinetId;
+  try{ await ipcRenderer.invoke('cabinet:save-config', clone(draftConfig)); }catch(_){}
+  toast(I18N.t('已删除：')+(cab.name||''), 'ok');
+  renderCabinetCards();
+  renderBody();
+  renderFooter();
+  // ARTNET：删除电柜后重新检查是否需要禁用窗口记忆
+  checkArtNetAndSyncWindowState();
+}
+
+// ======================= 按钮属性 =======================
+function renderColorPresets(){
+  const wrap = document.getElementById('colorPresets');
+  wrap.innerHTML = '';
+  PRESET_COLORS.forEach(c=>{
+    const s = document.createElement('span');
+    s.style.background = c;
+    s.dataset.color = c;
+    s.addEventListener('click', ()=>{
+      document.getElementById('propColor').value = c;
+      wrap.querySelectorAll('span').forEach(x=> x.classList.remove('sel'));
+      s.classList.add('sel');
+    });
+    wrap.appendChild(s);
+  });
+}
+function openBtnPropModal(cabinetId, btnIdx){
+  const cab = ((draftConfig && draftConfig.cabinets) || []).find(c=> c && c.id === cabinetId);
+  if(!cab) return;
+  const bt = cab.buttons[btnIdx];
+  if(!bt) return;
+  propTemp = { cabinetId, btnIdx };
+  document.getElementById('propName').value = bt.name || '';
+  document.getElementById('propRoadNo').value = parseInt(bt.roadNo,10) || (btnIdx+1);
+  document.getElementById('propColor').value = bt.color || '#ff6b6b';
+  document.getElementById('colorPresets').querySelectorAll('span').forEach(s=>{
+    s.classList.toggle('sel', s.dataset.color && (s.dataset.color.toLowerCase() === (bt.color||'').toLowerCase()));
+  });
+  document.getElementById('btnPropModal').classList.add('show');
+}
+function closeBtnPropModal(){
+  document.getElementById('btnPropModal').classList.remove('show');
+  propTemp = null;
+}
+async function confirmBtnProp(){
+  if(!propTemp) return closeBtnPropModal();
+  const cab = ((draftConfig && draftConfig.cabinets) || []).find(c=> c && c.id === propTemp.cabinetId);
+  if(!cab) return closeBtnPropModal();
+  const bt = cab.buttons[propTemp.btnIdx];
+  if(!bt) return closeBtnPropModal();
+  const name = (document.getElementById('propName').value || '').trim() || bt.name || (I18N.t('第')+(propTemp.btnIdx+1)+I18N.t('路'));
+  const roadNo = parseInt(document.getElementById('propRoadNo').value,10) || (propTemp.btnIdx+1);
+  const color = document.getElementById('propColor').value || bt.color || '#ff6b6b';
+  const n = parseInt(cab.switchCount,10) || 12;
+  if(!(roadNo>=1 && roadNo<=999)){ toast(I18N.t('路号需 ≥ 1'),'warn'); return; }
+  if(!(roadNo>=1 && roadNo<=36)){ toast(I18N.t('建议路号在 1~36 之间（与开关数匹配）'),'warn'); }
+  bt.name = name; bt.roadNo = roadNo; bt.color = color;
+  try{ await ipcRenderer.invoke('cabinet:save-config', clone(draftConfig)); }catch(_){}
+  toast(I18N.t('按钮属性已更新'),'ok');
+  renderBody();
+  closeBtnPropModal();
+}
+
+// ======================= 通用确认弹窗 =======================
+function openConfirm(title, msg){
+  return new Promise(resolve=>{
+    document.getElementById('confirmTitle').textContent = title || I18N.t('请确认');
+    document.getElementById('confirmMsg').textContent = msg || '';
+    confirmCb = (ok)=> resolve(!!ok);
+    document.getElementById('confirmModal').classList.add('show');
+  });
+}
+function closeConfirmModal(ok){
+  document.getElementById('confirmModal').classList.remove('show');
+  const cb = confirmCb; confirmCb = null;
+  if(typeof cb === 'function') cb(ok === true);
+}
+
+// ======================= 取消 / 保存 =======================
+function onCancel(){
+  try{ stopHeartbeatTimer(); }catch(_){}
+  try{
+    const allKeys = Object.keys(noReplyWatches || {});
+    allKeys.forEach(k => clearNoReplyWatch(k));
+  }catch(_){}
+  // 不写盘，直接关窗
+  try{ ipcRenderer.send('cabinet-window-control', 'close'); }catch(_){ window.close(); }
+}
+async function onSaveAndClose(){
+  // 确保 activeCabinetId 正确
+  if(draftConfig) draftConfig.activeCabinetId = activeCabinetId;
+  try{ stopHeartbeatTimer(); }catch(_){}
+  try{
+    const allKeys = Object.keys(noReplyWatches || {});
+    allKeys.forEach(k => clearNoReplyWatch(k));
+  }catch(_){}
+  // 保存到主进程（主进程持久化到 JSON 文件，关闭窗口后下次打开仍然保留）
+  try{ await ipcRenderer.invoke('cabinet:save-config', clone(draftConfig)); }catch(_){}
+  toast(I18N.t('配置已保存，关闭窗口...'),'ok');
+  setTimeout(()=>{
+    try{ ipcRenderer.send('cabinet-window-control', 'close'); }catch(_){ window.close(); }
+  }, 250);
+}
+</script>
+</body>
+</html>

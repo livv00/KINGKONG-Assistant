@@ -1,0 +1,1464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>远程控制 - 金刚助手</title>
+  <style>
+    /* ===== 主题 CSS 变量（由 JS 应用具体色值） ===== */
+    :root{
+      --theme-color:#ff6b6b;
+      --body-bg:#1a1a1a;
+      --container-bg:#2a2a2a;
+      --input-bg:#3a3a3a;
+      --text-color:#ffffff;
+      --text-muted:#bbbbbb;
+      --border-color:#4a4a4a;
+      --success-color:#25d366;
+      --danger-color:#e74c3c;
+      --warn-color:#f1c40f;
+      --info-color:#3498db;
+      --shadow-1: 0 2px 8px rgba(0,0,0,.25);
+      --shadow-2: 0 6px 20px rgba(0,0,0,.4);
+      --radius-card: 14px;
+      --radius-btn: 10px;
+    }
+    *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color: transparent; }
+    html,body{ width:100%; height:100%; }
+    body{
+      font-family: "PingFang SC","Microsoft YaHei",-apple-system,system-ui,sans-serif;
+      background: var(--body-bg);
+      color: var(--text-color);
+      font-size: 14px;
+      height: 100vh; /* 固定视口高度，让 flex 子项高度被约束（min-height:100vh 会让 body 随内容增长，导致内部 overflow 失效） */
+      overflow: hidden; /* 禁止 body 自身滚动，由内部 .list 区域滚动 */
+      padding: 14px 14px 82px;  /* 底部留 Tab 栏空间 */
+      line-height: 1.5;
+      transition: background .2s, color .2s;
+      display: flex; flex-direction: column;
+    }
+    a{ color:inherit; text-decoration:none; }
+    button{ font-family: inherit; -webkit-appearance: none; appearance:none; outline:none; border:none; background:none; cursor:pointer; color:inherit; }
+
+    /* ===== 顶部 Logo 区 ===== */
+    .topbar{
+      background: var(--container-bg);
+      border-radius: var(--radius-card);
+      padding: 14px 16px;
+      box-shadow: var(--shadow-1);
+      margin-bottom: 14px;
+      display:flex; align-items:center; justify-content:space-between;
+      border: 1px solid var(--border-color);
+    }
+    .topbar .brand{ display:flex; align-items:center; gap:10px; }
+    .topbar .logo{
+      width: 38px; height:38px; border-radius: 10px;
+      background: var(--container-bg);
+      display:flex; align-items:center; justify-content:center;
+      overflow: hidden; flex-shrink: 0;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 4px 10px rgba(0,0,0,.15);
+    }
+    .topbar .logo img{ width:100%; height:100%; object-fit: contain; display:block; }
+    .topbar h1{ font-size:17px; font-weight: 700; letter-spacing: .5px; }
+    .topbar .sub{ font-size:11px; color: var(--text-muted); margin-top:2px; }
+    .theme-dot{
+      width: 22px; height:22px; border-radius: 50%;
+      background: var(--theme-color);
+      box-shadow: 0 0 0 3px var(--container-bg), 0 0 0 4px var(--border-color);
+      flex-shrink: 0;
+    }
+
+    /* ===== 通用卡片 ===== */
+    .card{
+      background: var(--container-bg);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-card);
+      padding: 14px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow-1);
+      display:flex; flex-direction:column;
+    }
+    .card:last-child{ margin-bottom: 0; }
+    .card-title{
+      display:flex; align-items:center; gap:8px;
+      font-size:14px; font-weight:700;
+      margin-bottom: 12px;
+      color: var(--theme-color);
+    }
+    .card-title .emoji{ font-size:16px; }
+    .card-title .spacer{ flex:1; }
+    .card-title .badge{
+      font-size:10px; padding:2px 8px; border-radius: 10px;
+      background: rgba(0,0,0,.15); color: var(--text-muted);
+      font-weight: normal;
+    }
+    .badge.ok{ background: rgba(37,211,102,.15); color: var(--success-color); }
+    .badge.err{ background: rgba(231,76,60,.15); color: var(--danger-color); }
+    .badge.warn{ background: rgba(241,196,15,.18); color: var(--warn-color); }
+
+    /* ===== 页面显隐控制 ===== */
+    .page{ display:none; animation: fadeIn .22s ease; flex:1; min-height:0; /* 覆盖 flex 子项默认 min-height:auto，否则内容多时撑开父容器，内部 overflow 失效 */ }
+    .page.active{ display:flex; flex-direction:column; min-height:0; }
+    @keyframes fadeIn{ from{ opacity:0; transform: translateY(4px);} to{ opacity:1; transform:none; } }
+
+    /* ===== 音乐页：播放控制（紧凑模式） ===== */
+    .now-playing{
+      text-align:center;
+      padding: 2px 2px 4px;
+    }
+    .np-title{
+      font-size: 11px; font-weight:700;
+      overflow:hidden; text-overflow: ellipsis; white-space:nowrap;
+      padding: 0 4px;
+      color: var(--text-color);
+    }
+    .np-status{ font-size:9px; color: var(--text-muted); margin-top:1px; }
+
+    .control-bar{
+      display:flex; justify-content:space-around; align-items:center;
+      margin: 2px 0 4px;
+    }
+    .play-btn{
+      width: 30px; height: 30px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--theme-color), rgba(255,255,255,.08));
+      color: #fff; font-size: 13px;
+      display:flex; align-items:center; justify-content:center;
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--theme-color) 45%, transparent);
+      transition: transform .12s, filter .12s;
+    }
+    .play-btn:active{ transform: scale(.94); filter: brightness(.9); }
+    .ctrl-btn{
+      width: 22px; height:22px; border-radius: 50%;
+      background: var(--input-bg);
+      color: var(--text-color); font-size: 10px;
+      display:flex; align-items:center; justify-content:center;
+      transition: transform .12s, background .15s;
+      border: 1px solid var(--border-color);
+    }
+    .ctrl-btn:active{ transform: scale(.94); background: var(--border-color); }
+
+    /* 音量条 */
+    .volume-row{
+      display:flex; align-items:center; gap: 6px;
+      padding: 1px 2px;
+    }
+    .volume-row .v-label{ font-size:13px; color: var(--text-muted); min-width: 34px; }
+    .volume-row .v-val{ font-size:12px; color: var(--theme-color); font-weight:700; min-width:40px; text-align:right; }
+    .slider{
+      flex:1; height: 5px; border-radius: 3px;
+      background: var(--input-bg);
+      -webkit-appearance: none; appearance: none; outline: none;
+    }
+    .slider::-webkit-slider-thumb{
+      -webkit-appearance: none; appearance: none;
+      width:18px; height:18px; border-radius: 50%;
+      background: var(--theme-color);
+      box-shadow: 0 2px 6px rgba(0,0,0,.3);
+      cursor: pointer;
+    }
+    .slider::-moz-range-thumb{
+      width:18px; height:18px; border-radius: 50%;
+      background: var(--theme-color); border: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,.3); cursor: pointer;
+    }
+
+    /* 循环模式按钮 */
+    .mode-row{ display:flex; justify-content:center; margin-top: 8px; }
+    .mode-pill{
+      display:inline-flex; align-items:center; gap:6px;
+      padding: 6px 14px; border-radius: 999px;
+      background: var(--input-bg);
+      font-size:12px; color: var(--text-color);
+      border: 1px solid var(--border-color);
+    }
+
+    /* 分组/音乐列表 */
+    .list{
+      flex: 1; overflow-y: auto;
+      min-height: 0; /* 覆盖 flex 子项默认 min-height:auto，否则内容多时撑开溢出、滚动失效 */
+    }
+    .list::-webkit-scrollbar{ width:6px; }
+    .list::-webkit-scrollbar-thumb{ background: var(--border-color); border-radius: 4px; }
+    .pill-btn{
+      display:block; width: 100%;
+      padding: 5px 8px; margin-bottom:3px;
+      border-radius: 8px;
+      background: var(--input-bg);
+      color: var(--text-color);
+      text-align:left; font-size: 11px;
+      border: 1px solid transparent;
+      transition: transform .12s, background .15s, border-color .15s;
+      overflow:hidden; text-overflow: ellipsis; white-space:nowrap;
+    }
+    .pill-btn:active{ transform: scale(.985); }
+    .pill-btn.active{
+      background: color-mix(in srgb, var(--theme-color) 22%, var(--input-bg));
+      border-color: var(--theme-color);
+      color: var(--theme-color);
+      font-weight: 700;
+    }
+    .pill-btn.playing{ background: var(--success-color); color:#fff; font-weight:700; }
+    .pill-btn.paused{ background: var(--warn-color); color:#222; font-weight:700; }
+    .empty-hint{
+      text-align:center; color: var(--text-muted);
+      padding: 20px 10px; font-size: 12px;
+    }
+
+    /* ===== 电柜页：顶部 Tab + 切换 ===== */
+    .cab-tabs{
+      display:flex; gap:6px; overflow-x:auto; overflow-y:hidden;
+      margin-bottom: 12px; padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .cab-tabs::-webkit-scrollbar{ display:none; }
+    .cab-tab{
+      flex: 0 0 auto;
+      padding: 7px 14px; border-radius: 999px;
+      background: var(--input-bg);
+      border: 1px solid var(--border-color);
+      font-size: 12px; color: var(--text-color);
+      white-space: nowrap;
+      transition: all .15s;
+      display:flex; align-items:center; gap:6px;
+    }
+    .cab-tab.active{
+      background: var(--theme-color);
+      color:#fff;
+      border-color: var(--theme-color);
+      font-weight:700;
+      box-shadow: 0 4px 12px color-mix(in srgb, var(--theme-color) 35%, transparent);
+    }
+    .cab-tab .dot{
+      width: 8px; height: 8px; border-radius:50%;
+      background: #888;
+    }
+    .cab-tab .dot.online{ background: var(--success-color); box-shadow: 0 0 0 2px rgba(37,211,102,.2); }
+    .cab-tab .dot.offline{ background: var(--danger-color); box-shadow: 0 0 0 2px rgba(231,76,60,.18); }
+
+    .cab-actions{
+      display:flex; gap: 6px; margin-bottom: 12px;
+    }
+    .cab-actions .btn{ flex: 1; padding: 10px 4px; font-size: 12px; }
+    .cab-actions .btn.info{ flex: 0 0 auto; padding: 10px 12px; }
+    /* 4 种全开全关按钮颜色（与电柜管理窗口一致） */
+    .btn.cab-seq-on{ background: var(--theme-color); }
+    .btn.cab-rev-on{ background: #2d8659; }
+    .btn.cab-seq-off{ background: var(--danger-color); }
+    .btn.cab-rev-off{ background: #a02020; }
+    .btn{
+      flex: 1;
+      padding: 11px 10px; border-radius: 10px;
+      font-size: 13px; font-weight:700;
+      display:flex; align-items:center; justify-content:center; gap: 6px;
+      transition: transform .1s, filter .12s;
+      color:#fff;
+    }
+    .btn:active{ transform: scale(.97); filter: brightness(.9); }
+    .btn.on{ background: var(--theme-color); }
+    .btn.off{ background: var(--danger-color); }
+    .btn.info{ background: var(--info-color); }
+    .btn:disabled{ opacity: .45; pointer-events:none; }
+
+    /* 控台操作行：互斥 + 一键关闭 */
+    .console-actions{
+      display:flex; gap: 8px; margin-bottom: 12px;
+    }
+    .console-actions .btn{ flex:1; }
+    .btn.mutex-on{
+      background: var(--theme-color);
+      animation: mutex-blink 1.5s ease-in-out infinite;
+    }
+    @keyframes mutex-blink{
+      0%,100%{ opacity: 1; }
+      50%{ opacity: .7; }
+    }
+
+    /* 电柜按钮网格 */
+    .cab-grid{
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .road{
+      --road-c: var(--theme-color);
+      aspect-ratio: 1 / 1;
+      border-radius: 12px;
+      padding: 6px 4px;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap: 3px;
+      background: var(--road-c);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      filter: brightness(.52) saturate(.8);
+      transition: filter .12s, transform .08s, box-shadow .2s;
+      border: 2px solid transparent;
+      overflow: hidden;
+      position: relative;
+    }
+    .road:active{ transform: scale(.95); }
+    .road.status-on{
+      filter: brightness(1);
+      box-shadow: 0 0 0 2px var(--road-c), 0 4px 14px color-mix(in srgb, var(--road-c) 50%, transparent);
+      border-color: rgba(255,255,255,.25);
+    }
+    .road .name{
+      font-size: 12px; text-align:center;
+      overflow:hidden; text-overflow: ellipsis;
+      display:-webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      line-height: 1.2;
+      word-break: break-all;
+      text-shadow: 0 1px 2px rgba(0,0,0,.4);
+    }
+    .road .no{
+      font-size: 10px; opacity: .85; letter-spacing: .5px;
+    }
+
+    /* 控台页：连接状态条 */
+    .conn-status{
+      display:flex; align-items:center; gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--input-bg);
+      border: 1px solid var(--border-color);
+      margin-bottom: 12px;
+    }
+    .conn-status .s-dot{
+      width: 12px; height:12px; border-radius: 50%;
+      background:#888;
+      box-shadow: 0 0 0 3px rgba(136,136,136,.15);
+    }
+    .conn-status .s-dot.on{ background: var(--success-color); box-shadow: 0 0 0 3px rgba(37,211,102,.2); }
+    .conn-status .s-dot.off{ background: var(--danger-color); box-shadow: 0 0 0 3px rgba(231,76,60,.15); }
+    .conn-status .s-text{ flex:1; font-size:13px; }
+    .conn-status .s-text b{ font-weight:700; }
+    .conn-status .s-text .tip{ font-size:11px; color: var(--text-muted); margin-top:2px; }
+
+    /* 控台：正在播放（按钮网格，与主界面控台一致） */
+    .playing-grid{
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    .play-btn-item{
+      padding: 8px 6px;
+      border-radius: 8px;
+      cursor: pointer;
+      text-align:center;
+      transition: transform .08s, filter .12s;
+      border: 2px solid transparent;
+      overflow: hidden;
+      position: relative;
+    }
+    .play-btn-item:active{ transform: scale(.96); }
+    .play-btn-item.s1{
+      background: var(--success-color);
+      border-color: var(--success-color);
+      box-shadow: 0 0 0 2px var(--success-color), 0 4px 12px rgba(37,211,102,.3);
+    }
+    .play-btn-item.s2{
+      background: var(--warn-color);
+      border-color: var(--warn-color);
+    }
+    .play-btn-item .pbi-name{
+      font-size: 11px; font-weight:700; line-height: 1.25;
+      word-break: break-all;
+      display:-webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow:hidden;
+      text-shadow: 0 1px 2px rgba(0,0,0,.3);
+    }
+    .play-btn-item.s1 .pbi-name, .play-btn-item.s2 .pbi-name{ color:#fff; }
+    .play-btn-item .pbi-shield{
+      position: absolute; top: 2px; right: 2px;
+      font-size: 10px;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,.4));
+    }
+
+    /* 节目分类选择器 */
+    .cat-tabs{
+      display:flex; gap:6px; overflow-x:auto;
+      margin-bottom: 10px; padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .cat-tabs::-webkit-scrollbar{ display:none; }
+    .cat-tab{
+      flex: 0 0 auto;
+      padding: 6px 12px; border-radius: 999px;
+      background: var(--input-bg);
+      font-size: 12px;
+      border: 1px solid var(--border-color);
+      display:flex; align-items:center; gap:5px;
+      white-space: nowrap;
+    }
+    .cat-tab.active{
+      background: var(--theme-color);
+      border-color: var(--theme-color);
+      color:#fff; font-weight:700;
+    }
+    .cat-tab .cnt{
+      padding: 0 6px; border-radius: 8px;
+      background: rgba(0,0,0,.15); font-size:10px;
+    }
+    .cat-tab.active .cnt{ background: rgba(255,255,255,.2); }
+
+    /* 节目项网格 */
+    .item-grid{
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    .item-grid::-webkit-scrollbar{ width:6px; }
+    .item-grid::-webkit-scrollbar-thumb{ background: var(--border-color); border-radius: 4px; }
+    .item-block{
+      aspect-ratio: auto;
+      min-height: 56px;
+      padding: 8px 6px;
+      border-radius: 8px;
+      background: var(--input-bg);
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+      display:flex; align-items:center; justify-content:center;
+      text-align:center;
+      transition: transform .08s, box-shadow .15s, border-color .15s, background .15s;
+      position: relative;
+    }
+    .item-block:active{ transform: scale(.96); }
+    .item-block .ib-name{
+      font-size: 12px; font-weight:700; line-height: 1.25;
+      word-break: break-all;
+      color: var(--text-color);
+    }
+    .item-block .ib-shield{
+      position: absolute; top: 2px; right: 2px;
+      font-size: 10px;
+    }
+    .item-block.s0{ /* 停止：默认或自定义色 */ }
+    .item-block.s0.custom-color .ib-name{ color: #fff; }
+    .item-block.s1{ /* 播放 */
+      background: var(--success-color);
+      border-color: var(--success-color);
+    }
+    .item-block.s1 .ib-name{ color:#fff; }
+    .item-block.s2{ /* 暂停 */
+      background: var(--warn-color);
+      border-color: var(--warn-color);
+    }
+    .item-block.s2 .ib-name{ color:#222; }
+
+    /* 推杆列表 */
+    .fader-list{
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .fader-row{
+      background: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .fader-row .head{
+      display:flex; justify-content:space-between; align-items:center;
+      font-size: 12px; margin-bottom: 6px;
+    }
+    .fader-row .head .name{
+      overflow:hidden; text-overflow: ellipsis; white-space:nowrap;
+      font-weight:600; max-width: 60px;
+    }
+    .fader-row .head .val{
+      color: var(--theme-color); font-weight:700; font-size:11px;
+      min-width: 28px; text-align:right;
+    }
+    .fader-row .slider{ width:100%; }
+
+    /* ===== 底部 Tab 栏 ===== */
+    .tabbar{
+      position: fixed; left: 0; right: 0; bottom: 0;
+      background: var(--container-bg);
+      border-top: 1px solid var(--border-color);
+      display:flex;
+      padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+      box-shadow: 0 -4px 16px rgba(0,0,0,.25);
+      z-index: 100;
+    }
+    .tabbar .t{
+      flex:1;
+      padding: 8px 4px;
+      border-radius: 10px;
+      display:flex; flex-direction:column; align-items:center; gap: 3px;
+      font-size: 10.5px;
+      color: var(--text-muted);
+      transition: all .15s;
+    }
+    .tabbar .t .ico{ font-size: 20px; line-height: 1; }
+    .tabbar .t.active{
+      background: color-mix(in srgb, var(--theme-color) 16%, transparent);
+      color: var(--theme-color);
+      font-weight: 700;
+    }
+
+    /* ===== 轻量 Toast ===== */
+    .toast-stack{
+      position: fixed;
+      left: 50%; transform: translateX(-50%);
+      bottom: 92px;
+      display:flex; flex-direction:column; align-items:center; gap:6px;
+      z-index: 9999;
+      pointer-events: none;
+      width: calc(100% - 32px);
+      max-width: 420px;
+    }
+    .toast{
+      padding: 8px 14px;
+      border-radius: 999px;
+      color:#fff;
+      font-size: 12px; font-weight: 500;
+      box-shadow: 0 4px 14px rgba(0,0,0,.25);
+      animation: tin .18s ease both;
+      text-align:center;
+      word-break: break-word;
+      max-width: 100%;
+    }
+    .toast.err{ background: var(--danger-color); }
+    .toast.warn{ background: var(--warn-color); color:#333; }
+    .toast.ok{ background: var(--success-color); }
+    .toast.info{ background: var(--info-color); }
+    @keyframes tin{ from{ opacity:0; transform: translateY(6px);} to{ opacity:1; transform:none; } }
+
+    /* ===== 响应式 ===== */
+    @media (min-width: 420px){
+      .cab-grid{ grid-template-columns: repeat(5, 1fr); }
+      .item-grid{ grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (max-width: 340px){
+      .cab-grid{ grid-template-columns: repeat(3, 1fr); }
+      .item-grid{ grid-template-columns: repeat(2, 1fr); }
+      .fader-list{ grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 顶部 Logo 区 -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo"><img src="/logo.png" alt="金刚助手"></div>
+      <div>
+        <h1>金刚助手 · 远程控制</h1>
+        <div class="sub" id="topSub">手机端控制中心</div>
+      </div>
+    </div>
+    <div class="theme-dot" id="themeDot" title="当前主题色"></div>
+  </div>
+
+  <!-- ===================== 音乐页 ===================== -->
+  <div id="pageMusic" class="page active">
+    <!-- 播放控制 -->
+    <div class="card">
+      <div class="card-title"><span class="emoji">🎵</span>播放控制</div>
+      <div class="now-playing">
+        <div class="np-title" id="npTitle">未选择音乐</div>
+        <div class="np-status" id="npStatus">就绪</div>
+      </div>
+      <div class="control-bar">
+        <button class="ctrl-btn" id="prevBtn" title="上一首">⏮</button>
+        <button class="play-btn" id="playBtn" title="播放" style="display:none;">▶</button>
+        <button class="play-btn" id="pauseBtn" title="暂停" style="display:none;">⏸</button>
+        <button class="ctrl-btn" id="stopBtn" title="停止">⏹</button>
+        <button class="ctrl-btn" id="nextBtn" title="下一首">⏭</button>
+      </div>
+      <div class="volume-row">
+        <span class="v-label">🔊</span>
+        <input type="range" id="vol" class="slider" min="0" max="1" step="0.01" value="1">
+        <span class="v-val" id="volVal">100%</span>
+      </div>
+      <div class="mode-row">
+        <button class="mode-pill" id="modeBtn" title="切换循环模式">🔁 列表循环</button>
+      </div>
+    </div>
+
+    <!-- 分组（可收起/展开） -->
+    <div class="card" id="groupCard">
+      <div class="card-title" id="groupHeader" style="cursor:pointer;">
+        <span class="emoji">📁</span>分组
+        <span class="spacer"></span>
+        <span class="badge" id="groupBadge">0</span>
+        <span id="groupToggle" style="font-size:11px; color:var(--text-muted); margin-left:4px;">▾</span>
+      </div>
+      <div class="list" id="groupList">
+        <div class="empty-hint">加载中...</div>
+      </div>
+    </div>
+
+    <!-- 音乐列表 -->
+    <div class="card" style="flex:1; min-height:0;">
+      <div class="card-title">
+        <span class="emoji">🎶</span>音乐
+        <span class="spacer"></span>
+        <span class="badge" id="musicBadge">0</span>
+      </div>
+      <div class="list" id="musicList">
+        <div class="empty-hint">选择分组后加载音乐...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 电柜页 ===================== -->
+  <div id="pageCab" class="page">
+    <div class="card" style="flex:1; min-height:0;">
+      <div class="card-title">
+        <span class="emoji">⚡</span>电柜管理
+        <span class="spacer"></span>
+        <span class="badge" id="cabBadge">0 台</span>
+      </div>
+      <div class="cab-tabs" id="cabTabs">
+        <div class="empty-hint" style="width:100%; padding: 12px 0;">还没有添加电柜，请先在电脑端配置</div>
+      </div>
+      <div class="cab-actions" id="cabActions">
+        <button class="btn cab-seq-on"  id="cabSeqOn"  disabled>⚡ 顺开</button>
+        <button class="btn cab-rev-on"  id="cabRevOn"  disabled>🌱 逆开</button>
+        <button class="btn cab-seq-off" id="cabSeqOff" disabled>🛑 顺关</button>
+        <button class="btn cab-rev-off" id="cabRevOff" disabled>🔻 逆关</button>
+        <button class="btn info" id="cabRefresh" disabled>🔄</button>
+      </div>
+      <div id="cabMeta" style="font-size:11px; color: var(--text-muted); margin-top:-4px; margin-bottom: 10px; padding: 0 2px;"></div>
+      <div class="cab-grid" id="cabGrid" style="flex:1; overflow-y:auto; min-height:80px;">
+        <div class="empty-hint" style="grid-column:1/-1;">请先选择电柜</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 控台页 ===================== -->
+  <div id="pageConsole" class="page">
+    <div class="card">
+      <div class="card-title">
+        <span class="emoji">🎛️</span>连接控台
+        <span class="spacer"></span>
+        <span class="badge" id="consoleBadge">未连接</span>
+      </div>
+      <!-- 连接状态 -->
+      <div class="conn-status">
+        <div class="s-dot" id="csDot"></div>
+        <div class="s-text">
+          <div><b id="csState">加载中...</b></div>
+          <div class="tip" id="csTip">请在金刚助手中打开「连接控台」窗口</div>
+        </div>
+      </div>
+
+      <!-- 操作行：场景互斥 + 互斥保护 + 一键关闭 -->
+      <div class="console-actions">
+        <button class="btn info" id="btnMutex" title="开启后，播放新节目时自动关闭其他未受保护的节目">场景互斥</button>
+        <button class="btn off" id="btnStopAll" title="停止所有正在播放的节目" style="display:none;">🛑 一键关闭</button>
+      </div>
+
+      <!-- 正在播放（按钮网格） -->
+      <div class="card-title" style="margin-top: 6px;"><span class="emoji">🔴</span>正在播放
+        <span class="spacer"></span>
+        <span class="badge" id="playingBadge">0</span>
+      </div>
+      <div class="playing-grid" id="playingList">
+        <div class="empty-hint" style="grid-column:1/-1;">暂无正在播放的节目</div>
+      </div>
+    </div>
+
+    <div class="card" style="flex:1; min-height:0;">
+      <div class="card-title"><span class="emoji">📋</span>节目列表
+        <span class="spacer"></span>
+        <span class="badge" id="progBadge">0</span>
+      </div>
+      <!-- 分类 Tab -->
+      <div class="cat-tabs" id="catTabs">
+        <div class="empty-hint" style="width:100%; padding: 8px 0;">暂无分类，请先连接控台</div>
+      </div>
+      <!-- 节目网格 -->
+      <div class="item-grid" id="progGrid" style="flex:1; overflow-y:auto; min-height:0;">
+        <div class="empty-hint" style="grid-column:1/-1;">请先连接控台并加载列表</div>
+      </div>
+    </div>
+
+    <div class="card" id="faderCard" style="display:none;">
+      <div class="card-title"><span class="emoji">🎚️</span>推杆
+        <span class="spacer"></span>
+        <span class="badge" id="faderBadge">0</span>
+      </div>
+      <div class="fader-list" id="faderList"></div>
+    </div>
+  </div>
+
+  <!-- 底部 Tab 栏 -->
+  <div class="tabbar">
+    <div class="t active" data-page="pageMusic"><div class="ico">🎵</div>音乐</div>
+    <div class="t" data-page="pageCab"><div class="ico">⚡</div>电柜</div>
+    <div class="t" data-page="pageConsole"><div class="ico">🎛️</div>控台</div>
+  </div>
+
+  <!-- Toast 容器 -->
+  <div class="toast-stack" id="toastStack"></div>
+
+  <!-- ===================== I18N 多语言（必须先加载 8 个语言包 → 再加载 i18n.js 核心） ===================== -->
+  <script src="/js/i18n/zh-CN.js"></script>
+  <script src="/js/i18n/en-US.js"></script>
+  <script src="/js/i18n/ja-JP.js"></script>
+  <script src="/js/i18n/ko-KR.js"></script>
+  <script src="/js/i18n/fr-FR.js"></script>
+  <script src="/js/i18n/de-DE.js"></script>
+  <script src="/js/i18n/es-ES.js"></script>
+  <script src="/js/i18n/ru-RU.js"></script>
+  <script src="/js/i18n.js"></script>
+
+<script>
+/* ========== 全局状态 ========== */
+const STATE = {
+  // 主题
+  themes: null,
+  theme: 'dark',
+  // 界面语言（与主窗口设置同步：通过 /api/theme-config / /api/status 获取）
+  language: 'zh-CN',
+  _lastLang: 'zh-CN',
+  // 音乐
+  groups: [], currentGroup: 0,
+  isPlaying: false, currentPlayingIndex: -1,
+  volume: 1, repeatMode: 'listRepeat',
+  lastUserAction: 0,
+  // 电柜
+  cabinets: [], activeCabId: null,
+  // 控台
+  console: { connected:false, ip:'', categories:[], playingItems:[], faders:[], activeCatIdx: 0, sceneMutexEnabled:false, protectedPlayIds:[] },
+};
+const repeatModes = ['list','listRepeat','single','one'];
+const repeatLabels = { list:'☰ 列表播放', listRepeat:'🔁 列表循环', single:'🔂 单曲循环', one:'▶1 单曲播放' };
+
+/* ========== 工具：Toast ========== */
+let _toastCleanTimer = null;
+function toast(msg, kind){
+  const stack = document.getElementById('toastStack');
+  if(!stack) return;
+  while (stack.children.length >= 2) { try{ stack.removeChild(stack.firstChild); }catch(_){ break; } }
+  const el = document.createElement('div');
+  el.className = 'toast ' + (kind || 'info');
+  // 翻译 toast 里的中文原文（如果有）
+  el.textContent = (window.I18N && typeof window.I18N.t === 'function') ? window.I18N.t(msg || '') : (msg || '');
+  stack.appendChild(el);
+  clearTimeout(_toastCleanTimer);
+  _toastCleanTimer = setTimeout(() => {
+    try{ while(stack.firstChild) stack.removeChild(stack.firstChild); }catch(_){}
+  }, 2800);
+}
+
+/* ========== I18N：应用界面语言到当前手机远程控制页面 ========== */
+function applyRemoteLanguage(langCode){
+  const code = langCode || 'zh-CN';
+  STATE.language = code;
+  STATE._lastLang = code;
+  // 1) 调用 I18N.changeLanguage → 翻译现有 DOM 文本 + 属性（title/placeholder），并启动 MutationObserver 自动翻译后续新增节点
+  try{
+    if(window.I18N && typeof window.I18N.changeLanguage === 'function'){
+      window.I18N.changeLanguage(code);
+    }
+  }catch(_){}
+  // 2) 浏览器标签页标题（document.title 不在 document.body 里，I18N.applyLanguage 不遍历 → 手动翻译）
+  try{
+    const DEFAULT_TITLE = '远程控制 - 金刚助手';
+    if(window.I18N && typeof window.I18N.t === 'function'){
+      document.title = window.I18N.t(DEFAULT_TITLE) || DEFAULT_TITLE;
+    } else {
+      document.title = DEFAULT_TITLE;
+    }
+  }catch(_){}
+  // 3) 循环模式按钮显示的中文需要立即重绘一次（repeatLabels 的值是中文原文，updateRepeatBtn 内部会走 I18N.t）
+  try{ updateRepeatBtn(); }catch(_){}
+}
+
+/* ========== 工具：应用主题配色 ========== */
+function applyThemeByName(themeName){
+  if(!STATE.themes || !STATE.themes[themeName]) return;
+  const t = STATE.themes[themeName];
+  STATE.theme = themeName;
+  const r = document.documentElement.style;
+  r.setProperty('--theme-color', t.themeColor);
+  r.setProperty('--body-bg', t.bodyBg);
+  r.setProperty('--container-bg', t.containerBg);
+  r.setProperty('--input-bg', t.inputBg);
+  r.setProperty('--text-color', t.textColor);
+  r.setProperty('--text-muted', t.textMuted);
+  r.setProperty('--border-color', t.borderColor);
+  document.body.style.background = t.bodyBg;
+  document.body.style.color = t.textColor;
+  const dot = document.getElementById('themeDot');
+  if(dot) dot.style.background = t.themeColor;
+}
+
+/* ========== 1. 加载主题配置 + 界面语言 ========== */
+(async function initTheme(){
+  try{
+    const r = await fetch('/api/theme-config');
+    const d = await r.json();
+    if(d && d.success && d.themes){
+      STATE.themes = d.themes;
+      applyThemeByName(d.current || 'dark');
+      // 手机端应用界面语言（同步主窗口设置）
+      applyRemoteLanguage(d.language || 'zh-CN');
+    }
+  }catch(e){ /* 失败则使用默认 dark 配色 + 默认中文 */ applyRemoteLanguage('zh-CN'); }
+})();
+
+/* ========== 2. 底部 Tab 切换 ========== */
+document.querySelectorAll('.tabbar .t').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const target = tab.dataset.page;
+    document.querySelectorAll('.tabbar .t').forEach(t => t.classList.toggle('active', t === tab));
+    document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === target));
+    // 切换到对应页面时刷新一次数据
+    if(target === 'pageCab') loadCabinets();
+    if(target === 'pageConsole') loadConsole();
+    window.scrollTo({ top:0, behavior:'smooth' });
+  });
+});
+
+/* ============================================================
+   模块 A：音乐控制
+============================================================ */
+function recordUserAction(){ STATE.lastUserAction = Date.now(); }
+
+async function loadGroups(){
+  const wrap = document.getElementById('groupList');
+  wrap.innerHTML = '<div class="empty-hint">加载中...</div>';
+  try{
+    const d = await (await fetch('/api/groups')).json();
+    if(d.success && d.groups){
+      STATE.groups = d.groups;
+      document.getElementById('groupBadge').textContent = d.groups.length;
+      if(d.groups.length === 0){
+        wrap.innerHTML = '<div class="empty-hint">还没有分组</div>';
+        document.getElementById('musicList').innerHTML = '<div class="empty-hint">—</div>';
+        return;
+      }
+      wrap.innerHTML = '';
+      d.groups.forEach((g, i) => {
+        const b = document.createElement('button');
+        b.className = 'pill-btn' + (i === STATE.currentGroup ? ' active' : '');
+        b.textContent = g.name || '分组 ' + (i+1);
+        b.addEventListener('click', () => selectGroup(i));
+        wrap.appendChild(b);
+      });
+      selectGroup(STATE.currentGroup);
+    } else {
+      wrap.innerHTML = '<div class="empty-hint">加载失败</div>';
+    }
+  }catch(e){ wrap.innerHTML = '<div class="empty-hint">加载失败</div>'; }
+}
+function selectGroup(idx){
+  recordUserAction();
+  STATE.currentGroup = idx;
+  document.querySelectorAll('#groupList .pill-btn').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+  });
+  loadMusic(idx);
+}
+async function loadMusic(idx){
+  const wrap = document.getElementById('musicList');
+  wrap.innerHTML = '<div class="empty-hint">加载中...</div>';
+  try{
+    const d = await (await fetch('/api/music?group=' + idx)).json();
+    if(d.success){
+      document.getElementById('musicBadge').textContent = (d.music || []).length;
+      if(!d.music || d.music.length === 0){
+        wrap.innerHTML = '<div class="empty-hint">该分组暂无音乐</div>';
+        return;
+      }
+      wrap.innerHTML = '';
+      d.music.forEach((m, i) => {
+        const b = document.createElement('button');
+        b.className = 'pill-btn';
+        b.textContent = m.title || ('音乐 ' + (i+1));
+        b.addEventListener('click', () => playMusic(idx, i));
+        wrap.appendChild(b);
+      });
+      updateMusicStatus();
+    }
+  }catch(e){ wrap.innerHTML = '<div class="empty-hint">加载失败</div>'; }
+}
+function updateMusicStatus(){
+  // 更新音乐按钮状态
+  document.querySelectorAll('#musicList .pill-btn').forEach((el, i) => {
+    el.classList.remove('playing','paused');
+    if(i === STATE.currentPlayingIndex){
+      if(STATE.isPlaying) el.classList.add('playing');
+      else el.classList.add('paused');
+    }
+  });
+}
+function sendCtrl(action, extra){
+  const data = { action };
+  if(extra !== undefined){
+    if(action === 'play'){ data.group = extra.group; data.index = extra.index; }
+    else if(action === 'volume'){ data.volume = extra; }
+    else if(action === 'repeat'){ data.repeatMode = extra; }
+  }
+  fetch('/api/control', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  }).catch(()=>{});
+}
+function playMusic(g, i){
+  recordUserAction();
+  STATE.currentGroup = g;
+  STATE.currentPlayingIndex = i;
+  STATE.isPlaying = true;
+  updatePlayBtns();
+  updateMusicStatus();
+  sendCtrl('play', { group:g, index:i });
+  setNowPlaying();
+  setTimeout(pollStatus, 400);
+}
+function setNowPlaying(){
+  const t = document.getElementById('npTitle');
+  const s = document.getElementById('npStatus');
+  const I18N = (window.I18N && typeof window.I18N.t === 'function') ? window.I18N : null;
+  let titleZh = '未选择音乐';
+  try{
+    const g = STATE.groups[STATE.currentGroup];
+    if(g && g.musicList && g.musicList[STATE.currentPlayingIndex]){
+      titleZh = g.musicList[STATE.currentPlayingIndex].title || '未知音乐';
+    }
+  }catch(_){}
+  t.textContent = I18N ? I18N.t(titleZh) : titleZh;
+  let statusZh = STATE.isPlaying ? '正在播放' : (STATE.currentPlayingIndex >= 0 ? '已暂停' : '就绪');
+  s.textContent = I18N ? I18N.t(statusZh) : statusZh;
+}
+function updatePlayBtns(){
+  document.getElementById('playBtn').style.display  = STATE.isPlaying ? 'none' : 'flex';
+  document.getElementById('pauseBtn').style.display = STATE.isPlaying ? 'flex' : 'none';
+  setNowPlaying();
+}
+function updateRepeatBtn(){
+  const raw = repeatLabels[STATE.repeatMode] || '🔁 列表循环';
+  // 循环模式文本中含中文（如"列表循环/单曲循环"等）→ 通过 I18N.t 翻译；emoji 前缀一般不会被改动
+  if(window.I18N && typeof window.I18N.t === 'function'){
+    document.getElementById('modeBtn').textContent = window.I18N.t(raw);
+  } else {
+    document.getElementById('modeBtn').textContent = raw;
+  }
+}
+/* 播放按钮绑定 */
+document.getElementById('playBtn').addEventListener('click', () => {
+  STATE.isPlaying = true; updatePlayBtns();
+  sendCtrl('play'); setTimeout(pollStatus, 200);
+});
+document.getElementById('pauseBtn').addEventListener('click', () => {
+  STATE.isPlaying = false; updatePlayBtns();
+  sendCtrl('pause'); setTimeout(pollStatus, 200);
+});
+document.getElementById('stopBtn').addEventListener('click', () => {
+  STATE.isPlaying = false; STATE.currentPlayingIndex = -1;
+  updatePlayBtns(); updateMusicStatus();
+  sendCtrl('stop'); setTimeout(pollStatus, 200);
+});
+document.getElementById('prevBtn').addEventListener('click', () => {
+  sendCtrl('previous'); STATE.isPlaying = true; updatePlayBtns(); setTimeout(pollStatus, 300);
+});
+document.getElementById('nextBtn').addEventListener('click', () => {
+  sendCtrl('next'); STATE.isPlaying = true; updatePlayBtns(); setTimeout(pollStatus, 300);
+});
+/* 音量 */
+const volSlider = document.getElementById('vol');
+volSlider.addEventListener('input', () => {
+  recordUserAction();
+  const v = parseFloat(volSlider.value);
+  STATE.volume = v;
+  document.getElementById('volVal').textContent = Math.round(v*100) + '%';
+  sendCtrl('volume', v);
+});
+/* 循环模式切换 */
+document.getElementById('modeBtn').addEventListener('click', () => {
+  const idx = repeatModes.indexOf(STATE.repeatMode);
+  const next = repeatModes[(idx + 1) % repeatModes.length];
+  STATE.repeatMode = next;
+  updateRepeatBtn();
+  sendCtrl('repeat', next);
+  const label = window.I18N && typeof window.I18N.t === 'function'
+    ? window.I18N.t(repeatLabels[next] || next)
+    : (repeatLabels[next] || next);
+  const prefix = window.I18N && typeof window.I18N.t === 'function'
+    ? window.I18N.t('循环模式：')
+    : '循环模式：';
+  toast(prefix + label, 'info');
+});
+
+/* ============================================================
+   模块 B：电柜管理
+============================================================ */
+async function loadCabinets(){
+  try{
+    const d = await (await fetch('/api/cabinets')).json();
+    if(!d.success){ toast(d.message || '加载失败', 'err'); return; }
+    STATE.cabinets = d.cabinets || [];
+    document.getElementById('cabBadge').textContent = STATE.cabinets.length + ' 台';
+    renderCabTabs();
+    renderCabGrid();
+    // 禁用按钮状态
+    const has = STATE.cabinets.length > 0;
+    ['cabSeqOn','cabRevOn','cabSeqOff','cabRevOff','cabRefresh'].forEach(id => document.getElementById(id).disabled = !has);
+  }catch(e){ toast('加载电柜失败', 'err'); }
+}
+function renderCabTabs(){
+  const wrap = document.getElementById('cabTabs');
+  if(STATE.cabinets.length === 0){
+    wrap.innerHTML = '<div class="empty-hint" style="width:100%; padding: 12px 0;">还没有添加电柜，请先在电脑端「电柜管理」中配置</div>';
+    return;
+  }
+  // 确保 activeCabId 有效
+  if(!STATE.activeCabId || !STATE.cabinets.find(c => c.id === STATE.activeCabId)){
+    STATE.activeCabId = STATE.cabinets[0].id;
+  }
+  wrap.innerHTML = '';
+  STATE.cabinets.forEach(cab => {
+    const t = document.createElement('div');
+    t.className = 'cab-tab' + (cab.id === STATE.activeCabId ? ' active' : '');
+    let dotClass = '';
+    if(cab.online === true) dotClass = 'online';
+    else if(cab.online === false) dotClass = 'offline';
+    t.innerHTML = `<div class="dot ${dotClass}"></div>${cab.name || '未命名电柜'}`;
+    t.addEventListener('click', () => { STATE.activeCabId = cab.id; renderCabTabs(); renderCabGrid(); });
+    wrap.appendChild(t);
+  });
+}
+function renderCabGrid(){
+  const meta = document.getElementById('cabMeta');
+  const grid = document.getElementById('cabGrid');
+  const cab = STATE.cabinets.find(c => c.id === STATE.activeCabId);
+  if(!cab){
+    meta.textContent = '';
+    grid.innerHTML = '<div class="empty-hint" style="grid-column:1/-1;">请先选择电柜</div>';
+    return;
+  }
+  const n = cab.switchCount || 12;
+  const onLine = cab.online === true ? '✅ 在线' : (cab.online === false ? '❌ 掉线' : '⏳ 未知');
+  meta.innerHTML = `IP：<b style="color: var(--text-color);">${cab.ip || '-'}</b> &nbsp;·&nbsp; ${onLine} &nbsp;·&nbsp; ${n} 路 &nbsp;·&nbsp; 编号 #${cab.cabinetNo || 1}`;
+  grid.innerHTML = '';
+  for(let i = 1; i <= n; i++){
+    const r = document.createElement('div');
+    let btnName = '', btnColor = '';
+    if(Array.isArray(cab.buttons) && cab.buttons[i-1]){
+      btnName = cab.buttons[i-1].name || '';
+      btnColor = cab.buttons[i-1].color || '';
+    }
+    const roadName = btnName || ('第'+i+'路');
+    const color = btnColor || (STATE.themes && STATE.themes[STATE.theme] ? STATE.themes[STATE.theme].themeColor : '#ff6b6b');
+    const st = Array.isArray(cab.statuses) ? cab.statuses[i-1] : -1;
+    r.className = 'road' + (st === 1 ? ' status-on' : '');
+    r.style.setProperty('--road-c', color);
+    r.innerHTML = `<div class="name">${roadName}</div><div class="no">#${i}</div>`;
+    // 绑定点击：切换开关（按下时先取反状态，乐观显示）
+    let timer = null;
+    r.addEventListener('click', () => {
+      const newAction = (st === 1) ? 'off' : 'on';
+      const wasOn = r.classList.contains('status-on');
+      if(wasOn){ r.classList.remove('status-on'); }
+      else { r.classList.add('status-on'); }
+      STATE.lastUserAction = Date.now();
+      if(timer) clearTimeout(timer);
+      // 1.2秒后用服务器数据验证（保护期1秒结束后，对比修正乐观状态）
+      timer = setTimeout(() => loadCabinets(), 1200);
+      fetch('/api/cabinet/send', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ cabinetId: cab.id, road: i, action: newAction })
+      }).then(res => res.json()).then(x => {
+        if(x.success){ toast(`${cab.name || '电柜'} 第 ${i} 路 → ${newAction === 'on' ? '开' : '关'}`, 'ok'); }
+        else { toast(x.message || '发送失败', 'err'); }
+      }).catch(() => toast('发送失败', 'err'));
+    });
+    grid.appendChild(r);
+  }
+}
+/* 顶部顺开/逆开/顺关/逆关/刷新 */
+document.getElementById('cabSeqOn').addEventListener('click', () => sendCabAllMode('seqOn'));
+document.getElementById('cabRevOn').addEventListener('click', () => sendCabAllMode('revOn'));
+document.getElementById('cabSeqOff').addEventListener('click', () => sendCabAllMode('seqOff'));
+document.getElementById('cabRevOff').addEventListener('click', () => sendCabAllMode('revOff'));
+document.getElementById('cabRefresh').addEventListener('click', loadCabinets);
+const CAB_MODE_LABEL = { seqOn:'顺序全开', revOn:'逆序全开', seqOff:'顺序全关', revOff:'逆序全关' };
+async function sendCabAllMode(mode){
+  const cab = STATE.cabinets.find(c => c.id === STATE.activeCabId);
+  if(!cab) return;
+  // 乐观更新：立即更新按钮和UI状态，不等网络返回
+  const expectVal = (mode === 'seqOn' || mode === 'revOn') ? 1 : 0;
+  if(cab.statuses){
+    cab.statuses = cab.statuses.map(() => expectVal);
+  }
+  renderCabGrid();
+  STATE.lastUserAction = Date.now();
+  try{
+    const r = await fetch('/api/cabinet/all', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ cabinetId: cab.id, mode })
+    }).then(x => x.json());
+    if(r.success){
+      toast(`${cab.name || '电柜'} ${CAB_MODE_LABEL[mode]} 已发送`, 'ok');
+      // 1.2秒后用服务器数据验证（保护期1秒结束后，对比修正乐观状态）
+      setTimeout(loadCabinets, 1200);
+    } else toast(r.message || '发送失败', 'err');
+  }catch(e){ toast('发送失败', 'err'); }
+}
+
+/* ============================================================
+   模块 C：连接控台
+============================================================ */
+async function loadConsole(){
+  try{
+    const d = await (await fetch('/api/console/status')).json();
+    if(!d.success){ toast(d.message || '读取失败', 'err'); return; }
+    STATE.console.connected = !!d.connected;
+    STATE.console.ip = d.ip || '';
+    STATE.console.categories = d.categories || [];
+    // 去重：服务器返回的 playingItems 可能包含重复项，按 playId 去重
+  const _seen = new Set();
+  STATE.console.playingItems = (d.playingItems || []).filter(p => {
+    const key = String(p.playId);
+    if(_seen.has(key)) return false;
+    _seen.add(key);
+    return true;
+  });
+    STATE.console.faders = d.faders || [];
+    STATE.console.sceneMutexEnabled = !!d.sceneMutexEnabled;
+    STATE.console.protectedPlayIds = d.protectedPlayIds || [];
+    renderConsole();
+  }catch(e){ toast('读取控台失败', 'err'); }
+}
+function renderConsole(){
+  // 连接状态
+  const dot = document.getElementById('csDot');
+  const st = document.getElementById('csState');
+  const tip = document.getElementById('csTip');
+  const badge = document.getElementById('consoleBadge');
+  const btnStop = document.getElementById('btnStopAll');
+  const btnMutex = document.getElementById('btnMutex');
+  dot.className = 's-dot ' + (STATE.console.connected ? 'on' : 'off');
+  if(STATE.console.connected){
+    st.innerHTML = '已连接' + (STATE.console.ip ? '：<b>' + STATE.console.ip + '</b>' : '');
+    tip.textContent = '点击下方节目方块可播放/停止';
+    badge.textContent = '已连接';
+    badge.className = 'badge ok';
+  } else {
+    st.textContent = '未连接';
+    tip.textContent = '请在金刚助手中打开「连接控台」并连接到控台设备';
+    badge.textContent = '未连接';
+    badge.className = 'badge err';
+  }
+  btnStop.style.display = (STATE.console.playingItems.length > 0) ? 'flex' : 'none';
+
+  // 场景互斥按钮状态
+  renderConsoleMutex();
+
+  // 正在播放（按钮网格，与主界面控台一致）
+  renderConsolePlaying();
+
+  // 分类 Tab
+  const catWrap = document.getElementById('catTabs');
+  document.getElementById('progBadge').textContent =
+    STATE.console.categories.reduce((acc, c) => acc + (c.count || 0), 0) + ' 个';
+  if(STATE.console.categories.length === 0){
+    catWrap.innerHTML = '<div class="empty-hint" style="width:100%; padding: 8px 0;">暂无分类，请先连接控台加载列表</div>';
+  } else {
+    if(STATE.console.activeCatIdx >= STATE.console.categories.length) STATE.console.activeCatIdx = 0;
+    const firstNonFaderIdx = STATE.console.categories.findIndex(c => c.type !== 5);
+    if(firstNonFaderIdx >= 0 && STATE.console.activeCatIdx === 0 && STATE.console.categories[0] && STATE.console.categories[0].type === 5){
+      STATE.console.activeCatIdx = firstNonFaderIdx;
+    }
+    catWrap.innerHTML = '';
+    STATE.console.categories.forEach((c, i) => {
+      if(c.type === 5) return;
+      const t = document.createElement('div');
+      t.className = 'cat-tab' + (i === STATE.console.activeCatIdx ? ' active' : '');
+      t.innerHTML = `${c.name || c.typeName || '分类'}<span class="cnt">${c.count || 0}</span>`;
+      t.addEventListener('click', () => { STATE.console.activeCatIdx = i; renderConsole(); });
+      catWrap.appendChild(t);
+    });
+  }
+
+  // 节目网格（同步颜色）
+  const grid = document.getElementById('progGrid');
+  const cat = STATE.console.categories[STATE.console.activeCatIdx];
+  if(!cat || !Array.isArray(cat.items) || cat.items.length === 0){
+    grid.innerHTML = '<div class="empty-hint" style="grid-column:1/-1;">暂无节目</div>';
+  } else {
+    grid.innerHTML = '';
+    cat.items.forEach(it => {
+      const st = typeof it.status === 'number' ? it.status : 0;
+      const el = document.createElement('div');
+      el.className = 'item-block s' + st;
+      // 应用自定义颜色（停止态才显示自定义色，与主界面一致）
+      if(st === 0 && it.color){
+        el.classList.add('custom-color');
+        el.style.background = it.color;
+        el.style.borderColor = it.color;
+      }
+      // 互斥保护标记
+      const isProt = (STATE.console.protectedPlayIds || []).includes(String(it.playId));
+      el.innerHTML = `<div class="ib-name">${it.name || '节目 ' + it.playId}</div>${isProt ? '<div class="ib-shield">🛡</div>' : ''}`;
+      el.title = `点击 ${st === 1 ? '停止' : '播放'}：${it.name || it.playId}`;
+      el.addEventListener('click', () => {
+        STATE.lastUserAction = Date.now();
+        const cmd = { playId: it.playId };
+        const willPlay = (it.status !== 1);
+        if(!willPlay) cmd.action = 'stop';
+        else cmd.action = 'play';
+        // 乐观更新：立即切换图标状态
+        it.status = willPlay ? 1 : 0;
+        el.className = 'item-block s' + it.status;
+        if(it.status === 0 && it.color){
+          el.classList.add('custom-color');
+          el.style.background = it.color;
+          el.style.borderColor = it.color;
+        } else {
+          el.style.background = '';
+          el.style.borderColor = '';
+        }
+        // 同步正在播放列表
+        if(willPlay){
+          // 加入正在播放列表
+          if(!STATE.console.playingItems.some(p => String(p.playId) === String(it.playId))){
+            STATE.console.playingItems.push({ playId: it.playId, catName: cat.name || '', name: it.name || '', status: 1, protected: (STATE.console.protectedPlayIds || []).includes(String(it.playId)) });
+          }
+        } else {
+          STATE.console.playingItems = STATE.console.playingItems.filter(p => String(p.playId) !== String(it.playId));
+        }
+        renderConsolePlaying();
+        STATE.lastUserAction = Date.now();
+        sendConsoleCmd(cmd);
+      });
+      grid.appendChild(el);
+    });
+  }
+
+  // 推杆
+  const faderCard = document.getElementById('faderCard');
+  const faderWrap = document.getElementById('faderList');
+  document.getElementById('faderBadge').textContent = STATE.console.faders.length;
+  if(!STATE.console.faders || STATE.console.faders.length === 0){
+    faderCard.style.display = 'none';
+  } else {
+    faderCard.style.display = '';
+    faderWrap.innerHTML = '';
+    STATE.console.faders.forEach(f => {
+      const row = document.createElement('div');
+      row.className = 'fader-row';
+      row.innerHTML = `
+        <div class="head">
+          <div class="name" title="${f.name || ''}">${f.name || '推杆 ' + f.playId}</div>
+          <div class="val" data-fv="${f.playId}">${Math.round(f.value || 0)}</div>
+        </div>
+        <input type="range" min="0" max="255" step="1" value="${Math.round(f.value || 0)}" class="slider" data-fs="${f.playId}">
+      `;
+      const slider = row.querySelector('input');
+      const valLbl = row.querySelector('.val');
+      let sendTimer = null;
+      slider.addEventListener('input', () => {
+        valLbl.textContent = slider.value;
+        if(sendTimer) clearTimeout(sendTimer);
+        sendTimer = setTimeout(() => {
+          sendConsoleCmd({ action:'fader', playId: f.playId, value: parseInt(slider.value,10) });
+        }, 120);
+      });
+      faderWrap.appendChild(row);
+    });
+  }
+}
+// 只重新渲染「正在播放」部分（乐观更新时调用，避免整个控台页面重绘）
+function renderConsolePlaying(){
+  const playWrap = document.getElementById('playingList');
+  if(!playWrap) return;
+  document.getElementById('playingBadge').textContent = STATE.console.playingItems.length;
+  document.getElementById('btnStopAll').style.display = (STATE.console.playingItems.length > 0) ? 'flex' : 'none';
+  if(STATE.console.playingItems.length === 0){
+    playWrap.innerHTML = '<div class="empty-hint" style="grid-column:1/-1;">暂无正在播放的节目</div>';
+  } else {
+    playWrap.innerHTML = '';
+    STATE.console.playingItems.forEach(pi => {
+      const it = document.createElement('div');
+      const pis = (pi.status === 2 ? 's2' : 's1');
+      it.className = 'play-btn-item ' + pis;
+      const isProt = (STATE.console.protectedPlayIds || []).includes(String(pi.playId));
+      it.innerHTML = `<div class="pbi-name">${pi.name || '未知节目'}</div>${isProt ? '<div class="pbi-shield">🛡</div>' : ''}`;
+      it.title = `${pi.catName || ''} - ${pi.status === 2 ? '暂停' : '播放中'}（点击停止）`;
+      it.addEventListener('click', () => {
+        // 乐观更新：立即从正在播放列表移除
+        STATE.console.playingItems = STATE.console.playingItems.filter(p => String(p.playId) !== String(pi.playId));
+        renderConsolePlaying();
+        STATE.lastUserAction = Date.now();
+        sendConsoleCmd({ action:'stop', playId: pi.playId });
+      });
+      playWrap.appendChild(it);
+    });
+  }
+}
+// 只重新渲染「场景互斥」按钮（乐观更新时调用）
+function renderConsoleMutex(){
+  const btnMutex = document.getElementById('btnMutex');
+  if(!btnMutex) return;
+  const mutexOn = !!STATE.console.sceneMutexEnabled;
+  const protCount = (STATE.console.protectedPlayIds || []).length;
+  btnMutex.className = 'btn ' + (mutexOn ? 'mutex-on' : 'info');
+  btnMutex.textContent = (mutexOn ? '✓ 场景互斥' : '场景互斥') + (protCount > 0 ? ' 🛡' + protCount : '');
+}
+/* 一键停止全部 */
+document.getElementById('btnStopAll').addEventListener('click', () => {
+  // 乐观更新：立即清空正在播放列表
+  STATE.console.playingItems = [];
+  renderConsolePlaying();
+  STATE.lastUserAction = Date.now();
+  sendConsoleCmd({ action:'stopAll' });
+});
+/* 场景互斥切换 */
+document.getElementById('btnMutex').addEventListener('click', async () => {
+  // 乐观更新：立即切换按钮状态
+  STATE.console.sceneMutexEnabled = !STATE.console.sceneMutexEnabled;
+  renderConsoleMutex();
+  STATE.lastUserAction = Date.now();
+  try{
+    const r = await fetch('/api/console/mutex', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({})
+    }).then(x => x.json());
+    if(!r.success){
+      // 失败回滚
+      STATE.console.sceneMutexEnabled = !STATE.console.sceneMutexEnabled;
+      renderConsoleMutex();
+      toast(r.message || '切换失败', 'err'); return;
+    }
+    toast(r.message || '场景互斥已切换', 'ok');
+    setTimeout(loadConsole, 300);
+  }catch(e){
+    // 失败回滚
+    STATE.console.sceneMutexEnabled = !STATE.console.sceneMutexEnabled;
+    renderConsoleMutex();
+    toast('切换失败', 'err');
+  }
+});
+async function sendConsoleCmd(cmd){
+  try{
+    const r = await fetch('/api/console/send', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(cmd)
+    }).then(x => x.json());
+    if(!r.success){ toast(r.message || '发送失败', 'err'); return; }
+    // 1.2秒后用服务器数据验证（保护期1秒结束后，对比修正乐观状态）
+    setTimeout(loadConsole, 1200);
+  }catch(e){ toast('发送失败', 'err'); }
+}
+
+/* ============================================================
+   全局轮询：每 1.5 秒同步状态 + 主题 + 界面语言
+============================================================ */
+async function pollStatus(){
+  try{
+    // 音乐
+    const d = await (await fetch('/api/status')).json();
+    if(d.success){
+      // ★ 界面语言同步：若与上次不同立即重新翻译（用户在电脑端切语言时，打开的手机页也会自动切换）
+      if(d.language && d.language !== STATE._lastLang){
+        applyRemoteLanguage(d.language);
+      }
+      const noOverride = (Date.now() - STATE.lastUserAction) < 1000;
+      if(!noOverride){
+        if(d.isPlaying !== undefined) STATE.isPlaying = d.isPlaying;
+        if(d.currentPlayingIndex !== undefined) STATE.currentPlayingIndex = d.currentPlayingIndex;
+        if(d.currentGroup !== undefined) STATE.currentGroup = d.currentGroup;
+        if(d.repeatMode !== undefined) STATE.repeatMode = d.repeatMode;
+      }
+      // 音量总是同步
+      if(d.volume !== undefined && Math.abs(STATE.volume - d.volume) > 0.01){
+        STATE.volume = d.volume;
+        volSlider.value = STATE.volume;
+        document.getElementById('volVal').textContent = Math.round(STATE.volume*100) + '%';
+      }
+      // 主题同步
+      if(d.theme && STATE.themes && STATE.themes[d.theme] && d.theme !== STATE.theme){
+        applyThemeByName(d.theme);
+      }
+      updatePlayBtns();
+      updateRepeatBtn();
+      // 分组 & 音乐状态（只有页面可见时才渲染，避免跳动）
+      if(document.getElementById('pageMusic').classList.contains('active')){
+        // 同步分组高亮
+        document.querySelectorAll('#groupList .pill-btn').forEach((el, i) => {
+          el.classList.toggle('active', i === STATE.currentGroup);
+        });
+        updateMusicStatus();
+      }
+    }
+    // 电柜 & 控台：只在各自页面激活时刷新（用户操作2.5秒内不覆盖乐观状态）
+    const noOverride = (Date.now() - STATE.lastUserAction) < 2500;
+    if(!noOverride){
+      if(document.getElementById('pageCab').classList.contains('active')){
+        try{ await loadCabinets(); }catch(_){}
+      }
+      if(document.getElementById('pageConsole').classList.contains('active')){
+        try{ await loadConsole(); }catch(_){}
+      }
+    }
+    // 顺带重新拉取一次主题配置（首次失败时兜底），若拿到新语言也立即应用
+    if(!STATE.themes){
+      try{
+        const td = await (await fetch('/api/theme-config')).json();
+        if(td.success && td.themes){
+          STATE.themes = td.themes; applyThemeByName(td.current || STATE.theme);
+          if(td.language) applyRemoteLanguage(td.language);
+        }
+      }catch(_){}
+    }
+  }catch(_){}
+}
+// 启动
+window.addEventListener('load', () => {
+  // 分组收起/展开
+  const grpHeader = document.getElementById('groupHeader');
+  const grpList = document.getElementById('groupList');
+  const grpToggle = document.getElementById('groupToggle');
+  if(grpHeader && grpList && grpToggle){
+    // 从 localStorage 恢复收起状态
+    let collapsed = false;
+    try{ collapsed = localStorage.getItem('remoteGroupCollapsed') === '1'; }catch(_){}
+    if(collapsed){
+      grpList.style.display = 'none';
+      grpToggle.textContent = '▸';
+    }
+    grpHeader.addEventListener('click', () => {
+      const isHidden = grpList.style.display === 'none';
+      if(isHidden){
+        grpList.style.display = '';
+        grpToggle.textContent = '▾';
+        try{ localStorage.setItem('remoteGroupCollapsed', '0'); }catch(_){}
+      } else {
+        grpList.style.display = 'none';
+        grpToggle.textContent = '▸';
+        try{ localStorage.setItem('remoteGroupCollapsed', '1'); }catch(_){}
+      }
+    });
+  }
+  loadGroups();
+  setTimeout(loadCabinets, 200);
+  setTimeout(loadConsole, 400);
+  setTimeout(pollStatus, 600);
+  setInterval(pollStatus, 1500);
+});
+
+/* 键盘快捷键（调试用，PC 打开方便） */
+document.addEventListener('keydown', (e) => {
+  if(e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  if(e.code === 'Space'){ e.preventDefault();
+    if(STATE.isPlaying) document.getElementById('pauseBtn').click();
+    else document.getElementById('playBtn').click();
+  } else if(e.code === 'ArrowRight'){ e.preventDefault(); document.getElementById('nextBtn').click(); }
+  else if(e.code === 'ArrowLeft'){ e.preventDefault(); document.getElementById('prevBtn').click(); }
+});
+</script>
+</body>
+</html>

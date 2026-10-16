@@ -1,0 +1,37 @@
+# ===== 依赖 =====
+node_modules/
+_cache_original_node_modules/
+
+# ===== 构建产物 / 打包输出 =====
+build-src/
+_deliverables/
+output/
+*.asar
+*.zip
+*.7z
+
+# ===== 备份 / 临时文件 =====
+_backup_before_obfuscate_build/
+_原始代码参考/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+
+# ===== 本地开发/调试脚本（不入库） =====
+_repack_*.js
+_fast_repack.js
+__debug_*.js
+__test_*.js
+test-*.js
+_all_chinese_keys.txt
+
+# ===== 编辑器配置 =====
+.trae/
+.vscode/
+.idea/
+
+# ===== 系统文件 =====
+Thumbs.db
+Desktop.ini
+.DS_Store

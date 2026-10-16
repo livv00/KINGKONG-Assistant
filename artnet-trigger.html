@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>ARTNET 触发控制台</title>
+<style>
+  /* 主题默认值（主题应用前生效 / 兜底） */
+  :root {
+    --body:          #1a1a1a;
+    --container:     #2a2a2a;
+    --header:        #3a3a3a;
+    --accent:        #ff6b6b;
+    --text:          #ffffff;
+    --textSecondary: #aaaaaa;
+    --card:          #3a3a3a;
+    --cardHover:     #5a5a5a;
+    --input:         #4a4a4a;
+    --button:        #4a4a4a;
+    --buttonHover:   #5a5a5a;
+    --border:        #4a4a4a;
+    /* 语义色（不随主题变，保证视觉一致性） */
+    --success:       #2ecc71;
+    --warning:       #ffaa00;
+    --danger:        #e74c3c;
+    --info:          #3498db;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--body);
+    color: var(--text);
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+    font-size: 13px;
+    overflow: hidden;
+    user-select: none;
+  }
+  .app { display: flex; flex-direction: column; height: 100vh; }
+
+  /* 无边框标题栏 */
+  .titlebar {
+    flex: 0 0 42px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 12px 0 16px;
+    background: var(--header);
+    border-bottom: 1px solid var(--border);
+    -webkit-app-region: drag;
+  }
+  .titlebar .title {
+    font-weight: bold; font-size: 14px; letter-spacing: 0.5px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .status-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #888;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.05);
+  }
+  .status-dot.on {
+    background: var(--success);
+    box-shadow: 0 0 0 2px rgba(46, 204, 113, 0.18), 0 0 10px var(--success);
+  }
+  .win-ctrls { display: flex; gap: 4px; -webkit-app-region: no-drag; }
+  .win-ctrls button {
+    width: 36px; height: 28px; border: none; border-radius: 4px; cursor: pointer;
+    background: transparent; color: var(--text); font-size: 14px;
+    transition: background 0.15s;
+  }
+  .win-ctrls button:hover { background: var(--buttonHover); }
+  .win-ctrls button.close:hover { background: var(--danger); color: #fff; }
+
+  .scroll { flex: 1 1 auto; overflow: auto; padding: 18px 20px 24px; }
+  .scroll::-webkit-scrollbar { width: 10px; }
+  .scroll::-webkit-scrollbar-track { background: transparent; }
+  .scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+  .scroll::-webkit-scrollbar-thumb:hover { background: var(--buttonHover); }
+
+  .section {
+    background: var(--container);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-bottom: 18px;
+  }
+  .section h2 {
+    font-size: 14px; font-weight: bold; margin-bottom: 14px;
+    padding-left: 10px; border-left: 3px solid var(--accent);
+    color: var(--accent);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px 18px;
+  }
+  .grid .col-2 { grid-column: span 2; }
+  .grid .col-3 { grid-column: span 3; }
+  label.field { display: flex; flex-direction: column; gap: 6px; }
+  label.field > .lb {
+    font-size: 12px; color: var(--textSecondary);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  label.field select,
+  label.field input[type="number"],
+  label.field input[type="text"] {
+    width: 100%;
+    background: var(--input);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    font-size: 13px;
+  }
+  label.field select:focus,
+  label.field input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.18);
+  }
+  .input-wrap { display: flex; gap: 6px; align-items: center; }
+  .input-wrap > * { flex: 1 1 auto; }
+  .mini-btn {
+    flex: 0 0 auto;
+    background: var(--button);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 13px; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .mini-btn:hover { background: var(--buttonHover); border-color: var(--accent); }
+
+  .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .btn {
+    padding: 9px 18px; border-radius: 6px; border: none; cursor: pointer;
+    font-weight: bold; font-size: 13px; transition: background 0.15s, transform 0.05s;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { filter: brightness(0.88); }
+  .btn-danger  { background: var(--danger); color: #fff; }
+  .btn-danger:hover  { filter: brightness(0.88); }
+  .btn-default { background: var(--button); color: var(--text); border: 1px solid var(--border); }
+  .btn-default:hover { background: var(--buttonHover); }
+
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border-radius: 999px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    font-size: 12px; color: var(--textSecondary);
+  }
+  .status-pill.ok   { border-color: var(--success); color: var(--success); }
+  .status-pill.warn { border-color: var(--warning); color: var(--warning); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+  /* 通道映射表 */
+  table.channels {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+  }
+  table.channels th, table.channels td {
+    text-align: left; padding: 10px 12px; font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+  table.channels th {
+    background: var(--header); color: var(--textSecondary);
+    font-weight: 600; font-size: 12px;
+  }
+  table.channels tr:last-child td { border-bottom: none; }
+  table.channels tr.nz td { background: rgba(255, 170, 0, 0.08); }
+  .ch-no {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent); color: #fff; font-weight: bold; font-size: 12px;
+    margin-right: 8px;
+  }
+  .ch-name { font-weight: bold; color: var(--text); }
+  .ch-desc { font-size: 11px; color: var(--textSecondary); margin-top: 2px; line-height: 1.5; }
+  .bar {
+    width: 100%; height: 10px; background: var(--button); border-radius: 5px; overflow: hidden;
+    margin-top: 6px;
+  }
+  .bar > span {
+    display: block; height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--warning));
+    transition: width 0.08s linear;
+    border-radius: 5px;
+  }
+  .ch-val {
+    font-family: Consolas, monospace;
+    font-weight: bold; color: var(--accent); white-space: nowrap;
+  }
+
+  /* 手动测试滑块 */
+  .sliders { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
+  .slider-block {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .slider-block .sno {
+    font-size: 11px; font-weight: bold; color: var(--accent);
+    padding: 2px 6px; background: var(--cardHover); border-radius: 4px;
+  }
+  .slider-block .sname {
+    font-size: 11px; color: var(--textSecondary); text-align: center; min-height: 28px;
+    display: flex; align-items: center; line-height: 1.25;
+  }
+  .slider-block input[type="range"] {
+    -webkit-appearance: slider-vertical;
+    appearance: slider-vertical;
+    writing-mode: vertical-lr;
+    direction: rtl;
+    width: 28px;
+    height: 160px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .slider-block .sval {
+    font-family: Consolas, monospace;
+    font-weight: bold; color: var(--text); font-size: 12px;
+    padding: 2px 6px; background: var(--cardHover); border-radius: 4px;
+    min-width: 48px; text-align: center;
+  }
+
+  @media (max-width: 1100px) {
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sliders { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  }
+  @media (max-width: 700px) {
+    .grid { grid-template-columns: 1fr; }
+    .sliders { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+</style>
+
+  <!-- ===== I18N 国际化（语言包 + 核心 + 初始化 + 主进程语言同步） ===== -->
+  <script src="./js/i18n/zh-CN.js"></script>
+  <script src="./js/i18n/en-US.js"></script>
+  <script src="./js/i18n/ja-JP.js"></script>
+  <script src="./js/i18n/ko-KR.js"></script>
+  <script src="./js/i18n/fr-FR.js"></script>
+  <script src="./js/i18n/de-DE.js"></script>
+  <script src="./js/i18n/es-ES.js"></script>
+  <script src="./js/i18n/ru-RU.js"></script>
+  <script src="./js/i18n.js"></script>
+  <script>
+    (function () {
+      function applyLang(code) {
+        try { localStorage.setItem('appLanguage', code || 'zh-CN'); } catch (_) {}
+        try {
+          if (window.I18N && typeof window.I18N.changeLanguage === 'function') {
+            window.I18N.changeLanguage(code || 'zh-CN');
+            // 子窗口启动翻译完成后立即关闭 MutationObserver，避免运行时开销
+            // （ARTNET 触发等窗口的 UDP 数据频繁修改 textContent 会触发 mutation，关闭后无此开销）
+            // 主窗口不调此函数，保留其 observer 用于自动翻译右键菜单等动态内容
+            if (typeof window.I18N.shutdownObserver === 'function') window.I18N.shutdownObserver();
+          }
+        } catch (_) {}
+      }
+      try {
+        const saved = localStorage.getItem('appLanguage') || 'zh-CN';
+        if (saved !== 'zh-CN') {
+          if (document.body) applyLang(saved);
+          else window.addEventListener('DOMContentLoaded', function () { applyLang(saved); });
+        }
+      } catch (_) {}
+      try {
+        require('electron').ipcRenderer.on('language-data', function (event, langCode) {
+          if (document.body) applyLang(langCode);
+          else window.addEventListener('DOMContentLoaded', function () { applyLang(langCode); });
+        });
+      } catch (_) {}
+    })();
+  </script>
+</head>
+<body>
+<div class="app">
+  <!-- 标题栏 -->
+  <div class="titlebar">
+    <div class="title">
+      <span id="titlebarStatusDot" class="status-dot"></span>
+      ARTNET / sACN 触发控制台
+    </div>
+    <div class="win-ctrls">
+      <button onclick="sendCtrl('minimize')" title="最小化">🗕</button>
+      <button onclick="sendCtrl('maximize')" title="最大化/还原">🗖</button>
+      <button class="close" onclick="sendCtrl('close')" title="关闭">✕</button>
+    </div>
+  </div>
+
+  <!-- 滚动内容 -->
+  <div class="scroll">
+    <!-- 接收设置 -->
+    <div class="section">
+      <h2>接收设置</h2>
+      <div class="grid">
+        <label class="field col-2">
+          <div class="lb">绑定网卡 IP</div>
+          <div class="input-wrap">
+            <select id="bindIpSelect">
+              <option value="0.0.0.0">0.0.0.0 (所有网卡)</option>
+            </select>
+            <button class="mini-btn" onclick="refreshIPs()">🔄 刷新</button>
+          </div>
+        </label>
+        <label class="field">
+          <div class="lb">协议</div>
+          <select id="protoSelect">
+            <option value="both">Art-Net + sACN</option>
+            <option value="artnet">仅 Art-Net</option>
+            <option value="sacn">仅 sACN</option>
+          </select>
+        </label>
+        <label class="field">
+          <div class="lb">Universe (0–255)</div>
+          <input type="number" id="univInput" min="0" max="255" value="1">
+        </label>
+        <label class="field">
+          <div class="lb">起始地址码 (1–502)</div>
+          <input type="number" id="startAddrInput" min="1" max="502" value="1">
+        </label>
+      </div>
+
+      <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div class="actions">
+          <button class="btn btn-primary" onclick="applyAndStart()">✅ 应用并启动</button>
+          <button class="btn btn-danger"  onclick="stopArtNet()">⏹ 停止接收</button>
+        </div>
+        <div id="statusLine" class="status-pill"><span class="dot"></span><span>未启动</span></div>
+      </div>
+    </div>
+
+    <!-- 通道灯库映射 -->
+    <div class="section">
+      <h2>通道灯库映射（起始地址码后 7 通道）</h2>
+      <table class="channels" id="channelsTable">
+        <thead>
+          <tr>
+            <th style="width: 24%;">通道</th>
+            <th style="width: 10%;">值 / 255</th>
+            <th style="width: 20%;">可视化</th>
+            <th style="width: 46%;">功能说明</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- 手动仿真测试 -->
+    <div class="section">
+      <h2>手动仿真测试（无控台也能测）</h2>
+      <div class="sub-hint" style="margin-bottom: 10px; color: var(--textSecondary); font-size: 12px;">
+        拖动滑块发送 7 通道数据到主窗口，效果与真实控台完全一致。
+      </div>
+      <div class="sliders" id="slidersBox"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const { ipcRenderer } = require('electron');
+
+  // ========== 主题系统（与主窗口完全一致的 4 个主题枚举） ==========
+  const themes = {
+    dark: {
+      body: '#1a1a1a', container: '#2a2a2a', header: '#3a3a3a', accent: '#ff6b6b',
+      text: '#ffffff', textSecondary: '#aaaaaa',
+      card: '#3a3a3a', cardHover: '#5a5a5a',
+      input: '#4a4a4a', button: '#4a4a4a', buttonHover: '#5a5a5a',
+      border: '#4a4a4a',
+    },
+    light: {
+      body: '#f5f5f5', container: '#ffffff', header: '#f0f0f0', accent: '#ff6b6b',
+      text: '#000000', textSecondary: '#333333',
+      card: '#f0f0f0', cardHover: '#e0e0e0',
+      input: '#e0e0e0', button: '#e0e0e0', buttonHover: '#d0d0d0',
+      border: '#e0e0e0',
+    },
+    cute: {
+      body: '#ffe6f2', container: '#ffffff', header: '#ffccdd', accent: '#ff6699',
+      text: '#000000', textSecondary: '#333333',
+      card: '#ffeeee', cardHover: '#ffdddd',
+      input: '#ffeeee', button: '#ffccdd', buttonHover: '#ffb3cc',
+      border: '#ffccdd',
+    },
+    cool: {
+      body: '#1a1a1a', container: '#2a2a2a', header: '#3a3a3a', accent: '#ff6b35',
+      text: '#ffffff', textSecondary: '#e0e0e0',
+      card: '#222222', cardHover: '#3a3a3a',
+      input: '#4a4a4a', button: '#4a4a4a', buttonHover: '#5a5a5a',
+      border: '#ff6b35',
+    },
+  };
+
+  function shadeColor(hex, percent) {
+    let c = String(hex).replace(/^#/, '');
+    if (c.length === 3) c = c.split('').map(x => x + x).join('');
+    const num = parseInt(c, 16);
+    let r = (num >> 16) & 0xFF, g = (num >> 8) & 0xFF, b = num & 0xFF;
+    const amt = Math.round(2.55 * percent);
+    r = Math.max(0, Math.min(255, r + amt));
+    g = Math.max(0, Math.min(255, g + amt));
+    b = Math.max(0, Math.min(255, b + amt));
+    return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+  }
+
+  let currentTheme = 'dark';
+  function applyTheme(themeName) {
+    const theme = themes[themeName] || themes.dark;
+    currentTheme = themeName;
+    const root = document.documentElement;
+    root.style.setProperty('--body',          theme.body);
+    root.style.setProperty('--container',     theme.container);
+    root.style.setProperty('--header',        theme.header);
+    root.style.setProperty('--accent',        theme.accent);
+    root.style.setProperty('--text',          theme.text);
+    root.style.setProperty('--textSecondary', theme.textSecondary);
+    root.style.setProperty('--card',          theme.card);
+    root.style.setProperty('--cardHover',     theme.cardHover);
+    root.style.setProperty('--input',         theme.input);
+    root.style.setProperty('--button',        theme.button);
+    root.style.setProperty('--buttonHover',   theme.buttonHover);
+    root.style.setProperty('--border',        theme.border);
+    // 顺便把 accent-hover 给 .btn-primary 用（filter 其实已经够了，这里备用）
+    root.style.setProperty('--accent-hover',  shadeColor(theme.accent, -12));
+  }
+
+  // 先应用本地保存的主题（在没收到主窗口消息前生效，避免首次打开纯黑）
+  try {
+    const saved = localStorage.getItem('musicControllerTheme');
+    if (saved && themes[saved]) applyTheme(saved);
+  } catch (e) {}
+
+  // 接收主窗口通过 did-finish-load 广播的 theme-data（和 music-download.html 完全一致）
+  ipcRenderer.on('theme-data', (event, themeName) => {
+    if (themes[themeName]) {
+      applyTheme(themeName);
+      try { localStorage.setItem('musicControllerTheme', themeName); } catch (e) {}
+    }
+  });
+
+  // ========== 通道定义（7 通道） ==========
+  // 1=音量 2=分组 3=歌曲 4=播放/暂停 5=停止 6=OBS场景 7=循环模式
+  const CHANNELS = [
+    { name: '音量',       desc: '0–255 → 0–100%，稳定 2 包生效' },
+    { name: '分组选择',   desc: '0–255 映射分组索引，稳定 3 包切换' },
+    { name: '歌曲',       desc: '8 位歌曲索引，分组内取模，稳定 3 包切换' },
+    { name: '播放/暂停',  desc: '≥128 播放，<64 暂停，64–127 保持（滞回）' },
+    { name: '停止',       desc: '0→255 上升沿触发一次' },
+    { name: 'OBS 场景',   desc: '0–N 切换到对应 OBS 场景（变化触发）' },
+    { name: '循环模式',   desc: '列表 / 列表循环 / 单曲循环 / 单曲播放（每 64 一档）' },
+  ];
+
+  const currentSlice = new Array(7).fill(0);
+  let started = false;
+
+  function sendCtrl(a) { ipcRenderer.send('artnet-window-control', a); }
+
+  // 真实 UDP 数据到达时，把滑块显示同步到最新值（仅视觉，不触发滑块 input 事件）
+  function writeSliderValues(slice) {
+    for (let i = 0; i < 7; i++) {
+      const sld = document.getElementById('sld-' + i);
+      const lbl = document.getElementById('sld-v-' + i);
+      if (sld) sld.value = String(slice[i] || 0);
+      if (lbl) lbl.textContent = String(slice[i] || 0);
+    }
+  }
+  // 启动/停止时控制滑块交互状态：UDP 运行中手动滑块不生效
+  function setSlidersInteractive(isInteractive) {
+    for (let i = 0; i < 7; i++) {
+      const sld = document.getElementById('sld-' + i);
+      const blk = sld ? sld.closest('.slider-block') : null;
+      if (!sld) continue;
+      sld.disabled = !isInteractive;
+      sld.style.opacity = isInteractive ? '1' : '0.45';
+      sld.style.pointerEvents = isInteractive ? 'auto' : 'none';
+      if (blk) blk.style.opacity = isInteractive ? '1' : '0.85';
+    }
+    const title = document.getElementById('slidersBox') &&
+                  document.getElementById('slidersBox').closest('.section') &&
+                  document.getElementById('slidersBox').closest('.section').querySelector('.sub-hint');
+    if (title) {
+      title.textContent = isInteractive
+        ? '拖动滑块发送 7 通道数据到主窗口，效果与真实控台完全一致。'
+        : 'ARTNET 接收已启动：真实 UDP 数据优先，手动仿真暂禁用（停止后可继续使用）。';
+      title.style.color = isInteractive ? 'var(--textSecondary)' : 'var(--accent)';
+    }
+  }
+
+  function refreshIPs() {
+    const sel = document.getElementById('bindIpSelect');
+    const cur = sel.value;
+    let ips = [];
+    try { ips = ipcRenderer.sendSync('artnet-get-ips') || []; } catch (e) {}
+    sel.innerHTML = '';
+    const opt0 = document.createElement('option');
+    opt0.value = '0.0.0.0'; opt0.textContent = '0.0.0.0 (' + I18N.t('所有网卡') + ')';
+    sel.appendChild(opt0);
+    ips.forEach(ip => {
+      const o = document.createElement('option');
+      // 兼容两种返回格式：字符串 或 { name, address }
+      if (typeof ip === 'string') {
+        o.value = ip; o.textContent = ip;
+      } else if (ip && ip.address) {
+        o.value = ip.address;
+        o.textContent = ip.name || ip.address;
+      } else { return; }
+      sel.appendChild(o);
+    });
+    // 尝试恢复之前选中的值
+    const vals = Array.from(sel.options).map(opt => opt.value);
+    sel.value = vals.includes(cur) ? cur : '0.0.0.0';
+  }
+
+  function buildChannelTable() {
+    const tbody = document.querySelector('#channelsTable tbody');
+    tbody.innerHTML = '';
+    CHANNELS.forEach((c, i) => {
+      const tr = document.createElement('tr');
+      tr.id = 'ch-row-' + i;
+      tr.innerHTML = `
+        <td>
+          <span class="ch-no">${i + 1}</span>
+          <span class="ch-name">${c.name}</span>
+        </td>
+        <td class="ch-val" id="ch-val-${i}">0</td>
+        <td><div class="bar"><span id="ch-bar-${i}" style="width:0"></span></div></td>
+        <td><div class="ch-desc">${c.desc}</div></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+  function updateChannelVisuals(slice) {
+    for (let i = 0; i < 7; i++) {
+      const v = slice[i];
+      document.getElementById('ch-val-' + i).textContent = v;
+      document.getElementById('ch-bar-' + i).style.width = ((v / 255) * 100).toFixed(1) + '%';
+      const tr = document.getElementById('ch-row-' + i);
+      tr.classList.toggle('nz', v !== 0);
+    }
+    document.getElementById('titlebarStatusDot').classList.toggle('on', started);
+  }
+
+  function buildSliders() {
+    const box = document.getElementById('slidersBox');
+    box.innerHTML = '';
+    CHANNELS.forEach((c, i) => {
+      const d = document.createElement('div');
+      d.className = 'slider-block';
+      d.innerHTML = `
+        <div class="sno">${i + 1}</div>
+        <div class="sname">${c.name}</div>
+        <input type="range" min="0" max="255" value="0" id="sld-${i}">
+        <div class="sval" id="sld-v-${i}">0</div>
+      `;
+      box.appendChild(d);
+      const sld = d.querySelector('input');
+      const lbl = d.querySelector('.sval');
+      sld.addEventListener('input', () => {
+        if (started) {
+          // ARTNET 启动中，真实 UDP 优先级最高，手动滑块忽略
+          // 恢复滑块到 currentSlice 当前值（视觉与真实状态一致）
+          sld.value = String(currentSlice[i] || 0);
+          return;
+        }
+        const v = parseInt(sld.value, 10);
+        lbl.textContent = v;
+        currentSlice[i] = v;
+        updateChannelVisuals(currentSlice);
+        emitTest(currentSlice.slice());
+      });
+    });
+  }
+
+  const LS_CFG = 'artnetConfigV1';
+  function saveCfg(c) { try { localStorage.setItem(LS_CFG, JSON.stringify(c)); } catch (e) {} }
+  function loadCfg() {
+    try { return JSON.parse(localStorage.getItem(LS_CFG) || '{}'); } catch (e) { return {}; }
+  }
+  function readInputs() {
+    return {
+      bindIp:       document.getElementById('bindIpSelect').value,
+      protocol:     document.getElementById('protoSelect').value,
+      universe:     parseInt(document.getElementById('univInput').value, 10) || 0,
+      startAddress: parseInt(document.getElementById('startAddrInput').value, 10) || 1,
+    };
+  }
+  function applyInputs(cfg) {
+    if (cfg.bindIp)        document.getElementById('bindIpSelect').value = cfg.bindIp;
+    if (cfg.protocol)      document.getElementById('protoSelect').value = cfg.protocol;
+    if (cfg.universe != null)     document.getElementById('univInput').value = cfg.universe;
+    if (cfg.startAddress != null) document.getElementById('startAddrInput').value = cfg.startAddress;
+  }
+
+  function setStatus(text, cls) {
+    const el = document.getElementById('statusLine');
+    el.className = 'status-pill' + (cls ? ' ' + cls : '');
+    el.querySelector('span:last-child').textContent = text;
+  }
+
+  function applyAndStart() {
+    const cfg = readInputs();
+    cfg.universe = Math.max(0, Math.min(255, cfg.universe));
+    cfg.startAddress = Math.max(1, Math.min(502, cfg.startAddress));
+    document.getElementById('univInput').value = cfg.universe;
+    document.getElementById('startAddrInput').value = cfg.startAddress;
+    let r;
+    try { r = ipcRenderer.sendSync('artnet-apply-config', cfg); } catch (e) { r = null; }
+    if (r && r.success) {
+      try { r = ipcRenderer.sendSync('artnet-start'); } catch (e) { r = null; }
+      if (r && r.success) {
+        started = true;
+        saveCfg({ ...cfg, started: true });
+        setStatus(
+          `运行中  ·  ${cfg.protocol === 'sacn' ? 'sACN' : cfg.protocol === 'artnet' ? 'Art-Net' : 'Art-Net + sACN'}  ·  Universe ${cfg.universe}  ·  起始地址 ${cfg.startAddress}  ·  0 包`,
+          'ok'
+        );
+        setSlidersInteractive(false);
+      } else {
+        saveCfg({ ...cfg, started: false });
+        setStatus('启动失败: ' + (r && r.error ? r.error : '未知'), 'warn');
+      }
+    } else {
+      saveCfg({ ...cfg, started: false });
+      setStatus('配置应用失败', 'warn');
+    }
+    document.getElementById('titlebarStatusDot').classList.toggle('on', started);
+  }
+
+  function stopArtNet() {
+    try { ipcRenderer.sendSync('artnet-stop'); } catch (e) {}
+    started = false;
+    const cfg = readInputs();
+    saveCfg({ ...cfg, started: false });
+    setStatus('已停止', '');
+    document.getElementById('titlebarStatusDot').classList.remove('on');
+    setSlidersInteractive(true);
+    // 重置 currentSlice 为全0，避免残留的真实 UDP 数据影响后续手动测试
+    // （否则推音量时会带上残留的播放通道值，导致自己播放歌曲）
+    for (let i = 0; i < currentSlice.length; i++) currentSlice[i] = 0;
+    writeSliderValues(currentSlice);
+    updateChannelVisuals(currentSlice);
+  }
+
+  // 手动测试发送：rAF 节流 + 同步连发3包
+  // - rAF 节流：拖动过程中多次 input 只在一帧内发送一次，避免 setTimeout 交错导致防抖失效
+  // - 同步连发3包：覆盖分组/歌曲的 stable===3 防抖（不再用 setTimeout 异步）
+  let _emitPending = false;
+  let _emitSlice = null;
+  function emitTest(slice) {
+    _emitSlice = slice.slice();
+    if (_emitPending) return;
+    _emitPending = true;
+    requestAnimationFrame(() => {
+      _emitPending = false;
+      const snap = _emitSlice;
+      if (!snap) return;
+      // 同步连发3包，让分组/歌曲的3包防抖通过
+      for (let i = 0; i < 3; i++) {
+        try { ipcRenderer.sendSync('artnet-emit-test', { slice: snap }); } catch (e) {}
+      }
+    });
+  }
+
+  // ===== 接收主进程 UDP 实时广播 =====
+  // 数据每包都写入 currentSlice，但 DOM 渲染走节流（避免 40Hz 闪烁）
+  let sliceDirty = false;
+  ipcRenderer.on('artnet-dmx-monitor', (event, payload) => {
+    if (!payload || !Array.isArray(payload.slice)) return;
+    for (let i = 0; i < 7; i++) currentSlice[i] = payload.slice[i] || 0;
+    sliceDirty = true; // 标记需要刷新，实际渲染由 100ms 定时器处理
+  });
+
+  // 节流渲染：每 100ms 检查一次脏标记，有变化才更新 DOM（10Hz 稳定刷新，不闪）
+  setInterval(() => {
+    if (sliceDirty) {
+      sliceDirty = false;
+      updateChannelVisuals(currentSlice);
+      writeSliderValues(currentSlice);
+    }
+  }, 100);
+
+  // 状态栏轮询（500ms，仅刷新状态文字 + 保底数据同步）
+  setInterval(() => {
+    if (!started) return;
+    let s;
+    try { s = ipcRenderer.sendSync('artnet-get-status'); } catch (e) { s = null; }
+    if (!s) return;
+    const cfg = readInputs();
+    const t = s.lastPacketTime ? new Date(s.lastPacketTime).toLocaleTimeString() : '—';
+    // 状态栏显示（含 universe 匹配提示）
+    const matchTip = (s.lastSliceUniverse != null && s.lastSliceUniverse !== cfg.universe)
+      ? `  ·  ⚠ 收到 Universe ${s.lastSliceUniverse}（当前设置 ${cfg.universe}，音乐控制不触发）`
+      : '';
+    setStatus(
+      `运行中  ·  ${cfg.protocol === 'sacn' ? 'sACN' : cfg.protocol === 'artnet' ? 'Art-Net' : 'Art-Net + sACN'}  ·  Universe ${s.universe}  ·  地址 ${s.startAddress}  ·  ${s.packetCount} 包  ·  最后 ${t}${matchTip}`,
+      matchTip ? 'warn' : 'ok'
+    );
+    // 保底：如果事件推送遗漏了，用轮询的 lastSlice 同步数据（只标记脏，渲染走节流）
+    if (s.lastSlice && Array.isArray(s.lastSlice) && s.lastSlice.length === 7) {
+      let changed = false;
+      for (let i = 0; i < 7; i++) {
+        if (currentSlice[i] !== s.lastSlice[i]) { changed = true; break; }
+      }
+      if (changed) {
+        for (let i = 0; i < 7; i++) currentSlice[i] = s.lastSlice[i];
+        sliceDirty = true;
+      }
+    }
+  }, 500);
+
+  (function init() {
+    refreshIPs();
+    buildChannelTable();
+    buildSliders();
+    updateChannelVisuals(currentSlice);
+
+    const saved = loadCfg();
+    const autoStart = !!(saved && saved.started);
+    if (Object.keys(saved).length) {
+      if (saved.bindIp) {
+        let ips = [];
+        try { ips = ipcRenderer.sendSync('artnet-get-ips') || []; } catch (e) {}
+        // ips 元素可能是 { name, address } 对象，提取 address 做比较
+        const ipStrs = ips.map(ip => (typeof ip === 'string' ? ip : (ip && ip.address) || ''));
+        if (saved.bindIp !== '0.0.0.0' && !ipStrs.includes(saved.bindIp)) saved.bindIp = '0.0.0.0';
+      }
+      applyInputs(saved);
+    }
+    // 启动状态初始化：未自动启动前手动滑块可用；自动启动后 applyAndStart 内部会禁用
+    setSlidersInteractive(!autoStart);
+    // 上次是启动状态 → 打开窗口自动恢复
+    if (autoStart) applyAndStart();
+  })();
+</script>
+</body>
+</html>

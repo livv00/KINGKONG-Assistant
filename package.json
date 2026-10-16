@@ -1,0 +1,75 @@
+{
+  "name": "jingang-assistant",
+  "version": "2.5.6",
+  "description": "金刚助手",
+  "author": "金刚助手",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "pack": "electron-builder --dir",
+    "postinstall": "node scripts/patch-electron.js"
+  },
+  "build": {
+    "appId": "com.jingang.assistant",
+    "productName": "金刚助手",
+    "directories": {
+      "output": "D:\\TRAE LIVV\\output"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "big-screen.html",
+      "remote-control.html",
+      "audio-clipper.html",
+      "music-download.html",
+      "artnet-trigger.html",
+      "floating-window.html",
+      "console-connect.html",
+      "cabinet-manager.html",
+      "splash.html",
+      "js/**/*",
+      "api-server.js",
+      "logo.png",
+      "logo.ico",
+      "package.json"
+    ],
+    "win": {
+      "icon": "logo.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "logo.ico",
+      "uninstallerIcon": "logo.ico",
+      "installerHeaderIcon": "logo.ico",
+      "shortcutName": "金刚助手"
+    }
+  },
+  "devDependencies": {
+    "@electron/packager": "^19.0.5",
+    "@electron/rebuild": "^4.2.0",
+    "asar": "^3.2.0",
+    "electron": "^25.9.8",
+    "electron-builder": "^26.8.1",
+    "electron-packager": "^17.1.2",
+    "javascript-obfuscator": "^5.5.0"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "express": "^5.2.1",
+    "extract-zip": "^2.0.0",
+    "jzz": "^1.9.6",
+    "midi": "^2.0.0",
+    "qrcode-generator": "^2.0.4",
+    "socket.io": "^4.8.3"
+  }
+}

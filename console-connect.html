@@ -1,0 +1,3776 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>连接控台</title>
+<style>
+  /* 主题默认值 */
+  :root {
+    --body: #1a1a1a; --container: #2a2a2a; --header: #3a3a3a; --accent: #ff6b6b;
+    --text: #ffffff; --textSecondary: #aaaaaa;
+    --card: #3a3a3a; --cardHover: #5a5a5a;
+    --input: #4a4a4a; --button: #4a4a4a; --buttonHover: #5a5a5a; --border: #4a4a4a;
+    --success: #2ecc71; --warning: #ffaa00; --danger: #e74c3c; --info: #3498db;
+    /* 播放状态色（参考音乐按钮）
+     停止状态用主题色背景（--accent），字体用高对比深色，确保可读性 */
+  --playing: #2e7d32; --playingText: #ffffff;
+  --paused: #e65100; --pausedText: #ffffff;
+  --stopped: var(--accent); --stoppedText: #1a1a1a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--body); color: var(--text);
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+    font-size: 13px; overflow: hidden; user-select: none;
+  }
+  .app { display: flex; flex-direction: column; height: 100vh; }
+
+  /* 无边框标题栏 */
+  .titlebar {
+    flex: 0 0 42px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 12px 0 16px; background: var(--header); border-bottom: 1px solid var(--border);
+    -webkit-app-region: drag;
+  }
+  .titlebar .title { font-weight: bold; font-size: 14px; display: flex; align-items: center; gap: 10px; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #888; box-shadow: 0 0 0 2px rgba(255,255,255,0.05); }
+  .status-dot.on { background: var(--success); box-shadow: 0 0 0 2px rgba(46,204,113,0.18), 0 0 10px var(--success); }
+  .status-dot.err { background: var(--danger); box-shadow: 0 0 0 2px rgba(231,76,60,0.18); }
+  .win-ctrls { display: flex; gap: 4px; -webkit-app-region: no-drag; }
+  .win-ctrls button { width: 36px; height: 28px; border: none; border-radius: 4px; cursor: pointer; background: transparent; color: var(--text); font-size: 14px; transition: background 0.15s; }
+  .win-ctrls button:hover { background: var(--buttonHover); }
+  .win-ctrls button.close:hover { background: var(--danger); color: #fff; }
+
+  /* 顶部连接条 */
+  .conn-bar {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px; background: var(--container); border-bottom: 1px solid var(--border);
+  }
+  .conn-bar .lb { font-size: 12px; color: var(--textSecondary); white-space: nowrap; }
+  .conn-bar input {
+    flex: 1; min-width: 100px; padding: 6px 10px; border: 1px solid var(--border);
+    border-radius: 5px; background: var(--input); color: var(--text); font-size: 13px; outline: none;
+  }
+  .conn-bar input:focus { border-color: var(--accent); }
+  .conn-bar .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; white-space: nowrap; }
+  .conn-bar .pill.green { background: rgba(46,204,113,0.15); color: var(--success); border: 1px solid rgba(46,204,113,0.3); }
+  .conn-bar .pill.gray { background: rgba(170,170,170,0.15); color: var(--textSecondary); border: 1px solid rgba(170,170,170,0.3); }
+  .conn-bar .pill.red { background: rgba(231,76,60,0.15); color: var(--danger); border: 1px solid rgba(231,76,60,0.3); }
+  .conn-bar .sc-toggle-wrap { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; cursor: pointer; user-select: none; }
+  .conn-bar .sc-toggle-wrap input { width: 14px; height: 14px; cursor: pointer; margin: 0; }
+  .conn-bar .sc-toggle-label { color: var(--textSecondary); }
+  .conn-bar .sc-toggle-status { font-weight: bold; font-size: 11px; }
+  .conn-bar .sc-toggle-status.on { color: var(--success, #2ecc71); }
+  .conn-bar .sc-toggle-status.off { color: var(--textSecondary, #aaa); }
+
+  /* AI触发配置弹窗 */
+  .at-section { margin-bottom: 14px; }
+  .at-label { font-size: 13px; font-weight: bold; color: var(--text); margin-bottom: 6px; display: block; }
+  .at-desc { font-size: 11px; color: var(--textSecondary); margin-bottom: 6px; }
+  .at-select { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--input); color: var(--text); font-size: 13px; }
+  .at-pool { max-height: 280px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; padding: 6px; }
+  .at-pool-item { display: flex; align-items: center; gap: 6px; padding: 4px 6px; font-size: 12px; border-radius: 4px; cursor: pointer; }
+  .at-pool-item:hover { background: var(--buttonHover); }
+  .at-pool-item input { width: 14px; height: 14px; cursor: pointer; margin: 0; }
+  .at-pool-empty { color: var(--textSecondary); font-size: 12px; padding: 12px; text-align: center; }
+
+  .btn { padding: 6px 14px; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: bold; transition: filter 0.15s, opacity 0.15s; }
+  .btn:hover { filter: brightness(1.12); }
+  .btn:active { filter: brightness(0.92); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-default { background: var(--button); color: var(--text); }
+  .btn-default:hover { background: var(--buttonHover); }
+
+  /* 滚动内容区 */
+  .scroll { flex: 1 1 auto; overflow: auto; padding: 14px 16px 20px; }
+  .scroll::-webkit-scrollbar { width: 10px; }
+  .scroll::-webkit-scrollbar-track { background: transparent; }
+  .scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+  .scroll::-webkit-scrollbar-thumb:hover { background: var(--buttonHover); }
+
+  /* 分类区域（带边框圈起来，不折叠） */
+  .cat-group {
+    background: var(--container); border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 10px; overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+    user-select: none;
+  }
+  .cat-group.collapsed .cat-body { display: none; }
+  .cat-group.dragging { opacity: 0.4; transform: scale(0.98); }
+  .cat-group.drag-over {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(255,107,107,0.25);
+  }
+  .cat-group.drag-over-top {
+    border-top: 3px solid var(--accent);
+  }
+  .cat-group.drag-over-bottom {
+    border-bottom: 3px solid var(--accent);
+  }
+  .cat-head {
+    display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+    background: var(--header); border-bottom: 1px solid var(--border);
+    cursor: grab;
+  }
+  .cat-head:active { cursor: grabbing; }
+  .cat-head .arrow {
+    width: 0; height: 0; display: inline-block;
+    border-left: 4px solid transparent; border-right: 4px solid transparent;
+    border-top: 5px solid var(--textSecondary);
+    transition: transform 0.2s;
+  }
+  .cat-group.collapsed .arrow { transform: rotate(-90deg); }
+  .cat-head .cname { flex: 1; font-size: 12px; font-weight: bold; color: var(--text); }
+  .cat-head .ctype { font-size: 10px; color: var(--textSecondary); padding: 1px 6px; border-radius: 8px; background: var(--input); }
+  .cat-head .ccount { font-size: 10px; color: var(--accent); padding: 1px 8px; border-radius: 8px; background: rgba(255,107,107,0.12); font-weight: bold; }
+  .cat-head .ccount.zero { color: var(--textSecondary); background: var(--input); }
+  .cat-head .drag-handle {
+    color: var(--textSecondary); font-size: 14px; line-height: 1; padding: 0 2px; cursor: grab;
+    display: inline-flex; align-items: center;
+  }
+  .cat-body { padding: 8px; }
+
+  /* 节目项方块网格 */
+  .item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
+  .item-grid.fader-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+
+  /* 普通节目项方块（和字体差不多大） */
+  .item-block {
+    position: relative; padding: 5px 6px; border-radius: 4px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--card);
+    transition: transform 0.1s, box-shadow 0.15s;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 28px; text-align: center;
+  }
+  .item-block:hover { transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
+  .item-block.active { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(255,107,107,0.3); }
+  .item-block .ib-name { font-size: 12px; font-weight: bold; word-break: break-all; line-height: 1.2; }
+  /* 播放状态颜色 */
+  .item-block.s0 { background: var(--stopped); border-color: var(--stopped); color: var(--stoppedText); }
+  .item-block.s1 { background: var(--playing); border-color: var(--playing); color: var(--playingText); }
+  .item-block.s2 { background: var(--paused); border-color: var(--paused); color: var(--pausedText); }
+
+  /* 空分类提示 */
+  .cat-empty { color: var(--textSecondary); font-size: 11px; padding: 6px 4px; text-align: center; }
+
+  /* 推杆方块（缩窄宽度，两列布局：左名称，右垂直推满→推杆→数值→归零） */
+  .fader-block {
+    background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 4px; display: flex; align-items: stretch; gap: 3px;
+    transition: border-color 0.15s;
+    height: 210px; /* 高度保持不变 */
+    width: 86px;  /* 整体宽度明显缩短 */
+    box-sizing: border-box;
+    overflow: hidden; /* 防止任何子元素超出块框视觉 */
+  }
+  .fader-block.active { border-color: var(--accent); }
+  /* 左列：名称（每个字正立横写，整列从上到下逐字排列） */
+  .fader-block .fb-name {
+    font-size: 11px; font-weight: bold; line-height: 1.3;
+    letter-spacing: 0;
+    color: var(--text); text-align: center;
+    display: flex; flex-direction: column; align-items: center;
+    flex: 0 0 auto;
+    width: 22px;
+    padding: 4px 2px 4px 0;
+    margin-right: 2px;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+    max-height: 100%;
+    box-sizing: border-box;
+    user-select: none;
+    align-self: stretch;
+    word-break: break-all;
+  }
+  .fader-block .fb-name .idx { font-size: 9px; color: var(--textSecondary); margin-bottom: 2px; }
+  .fader-block .fb-name .nc { display: block; line-height: 1.25; }
+  /* 右列：推满按钮 → 推杆 → 数值 → 归零（垂直叠放） */
+  .fader-block .fb-col {
+    flex: 1;
+    min-width: 0;
+    display: flex; flex-direction: column; align-items: stretch; justify-content: space-between;
+    gap: 3px;
+    padding: 1px 0;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .fader-block .fb-col .b-full,
+  .fader-block .fb-col .b-zero {
+    box-sizing: border-box;
+    width: 100%; max-width: 100%;
+    padding: 2px 0;
+    font-size: 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: filter 0.15s;
+    text-align: center;
+    white-space: nowrap;
+    line-height: 1.2;
+  }
+  .fader-block .fb-col .b-full:hover { filter: brightness(1.12); }
+  .fader-block .fb-col .b-zero:hover { filter: brightness(1.12); }
+  .fader-block .fb-col .b-full { background: var(--success); color: #fff; }
+  .fader-block .fb-col .b-zero { background: var(--danger); color: #fff; }
+  .fader-block .fb-col .fb-val {
+    box-sizing: border-box;
+    width: 100%; max-width: 100%;
+    font-size: 10px; color: var(--accent); font-weight: bold; text-align: center;
+    background: var(--input); border-radius: 4px;
+    padding: 2px 0;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  /* 推杆容器：严格限制在右列宽度内，旋转后也不会视觉溢出 */
+  .fader-block .fb-slider-wrap {
+    box-sizing: border-box;
+    width: 100%;
+    height: 128px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    overflow: hidden;      /* 关键：超出就裁掉，不出现滑块阴影/边缘外溢 */
+    border-radius: 4px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent 40%);
+  }
+  /* 推杆滑块：使用 rotate(-90deg) 方式将横向 range 转为垂直，保证 value=0（下）→ value=255（上）一致且不跳 */
+  .fader-vslider {
+    -webkit-appearance: none; appearance: none;
+    width: 126px; height: 20px; background: transparent; outline: none;
+    transform: rotate(-90deg);
+    transform-origin: center;
+    padding: 0; margin: 0;
+    box-sizing: border-box;
+  }
+  .fader-vslider::-webkit-slider-runnable-track {
+    width: 100%; height: 6px;
+    background: var(--input); border-radius: 3px;
+  }
+  .fader-vslider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 16px; border-radius: 3px;
+    background: var(--accent);
+    margin-top: -5px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.35);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .fader-vslider::-webkit-slider-thumb:hover { filter: brightness(1.1); }
+  .fader-vslider::-moz-range-track { width:100%; height:6px; background:var(--input); border-radius:3px; }
+  .fader-vslider::-moz-range-thumb { width:13px; height:16px; border-radius:3px; background:var(--accent); border:none; cursor:pointer; }
+
+  /* 自动刷新微闪效果（极淡） */
+  @keyframes refresh-flash {
+    0% { box-shadow: inset 0 0 0 0 rgba(255,255,255,0); }
+    30% { box-shadow: inset 0 0 30px 0 rgba(255,255,255,0.04); }
+    100% { box-shadow: inset 0 0 0 0 rgba(255,255,255,0); }
+  }
+  .refreshing .cat-group { animation: refresh-flash 0.6s ease-out; }
+
+  /* 正在播放区域（置顶固定，不随滚动） */
+  #playingSection {
+    flex: 0 0 auto;
+    border-top: 1px solid var(--border);
+    background: var(--container);
+  }
+  .playing-section { overflow: hidden; display: flex; flex-direction: column; }
+  .playing-head {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    background: var(--header); border-bottom: 1px solid var(--border);
+    flex: 0 0 auto;
+  }
+  .playing-head .ph-title { font-size: 13px; font-weight: bold; color: var(--accent); margin-right: 4px; }
+  .playing-head .spacer { flex: 1; }
+  .playing-head .ph-count { font-size: 10px; color: var(--success); padding: 1px 8px; border-radius: 8px; background: rgba(46,204,113,0.12); font-weight: bold; }
+  .playing-head .ph-count.zero { color: var(--textSecondary); background: var(--input); }
+
+  /* 头部操作按钮：互斥保护 / 场景互斥 / 一键关闭 */
+  .ph-actions { display: flex; align-items: center; gap: 6px; }
+  .ph-btn {
+    padding: 4px 10px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px;
+    background: var(--button); color: var(--text); cursor: pointer; font-weight: bold;
+    transition: filter 0.15s, background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .ph-btn:hover { filter: brightness(1.12); background: var(--buttonHover); }
+  .ph-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* 场景互斥激活：按钮闪烁（一直闪，不停止） */
+  @keyframes mutex-blink {
+    0%, 100% { background: var(--success); border-color: var(--success); color: #fff; box-shadow: 0 0 0 0 rgba(46,204,113,0.4); }
+    50%      { background: #27ae60; border-color: #27ae60; color: #fff; box-shadow: 0 0 8px 2px rgba(46,204,113,0.6); }
+  }
+  .ph-btn.btn-mutex.on {
+    animation: mutex-blink 1s ease-in-out infinite;
+  }
+
+  /* 一键关闭 */
+  .ph-btn.btn-stopall { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+  /* 正在播放内容体：3行高度，按钮网格，超出滚动 */
+  .playing-body-wrap {
+    flex: 0 0 auto;
+    max-height: calc(28px * 3 + 10px * 2 + 6px * 2); /* 3行（28方块+6间隙） + 内边距10*2 */
+    overflow: auto;
+    padding: 10px;
+  }
+  .playing-body-wrap::-webkit-scrollbar { width: 8px; height: 8px; }
+  .playing-body-wrap::-webkit-scrollbar-track { background: transparent; }
+  .playing-body-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .playing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 6px;
+  }
+  .playing-empty { color: var(--textSecondary); font-size: 11px; padding: 6px 4px; text-align: center; }
+
+  /* 正在播放按钮（方块风格，非列表） */
+  .playing-btn {
+    position: relative;
+    padding: 6px 8px; border-radius: 4px; cursor: pointer;
+    border: 1px solid var(--playing);
+    background: var(--playing); color: var(--playingText);
+    display: flex; align-items: center; gap: 6px;
+    transition: filter 0.15s, transform 0.1s;
+    min-height: 28px;
+    text-align: left;
+  }
+  .playing-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .playing-btn.paused {
+    background: var(--paused); border-color: var(--paused); color: var(--pausedText);
+  }
+  .playing-btn.protected::before {
+    content: "🛡";
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 9px;
+    line-height: 1;
+    opacity: 0.85;
+  }
+  .playing-btn .pb-cat {
+    flex: 0 0 auto; font-size: 9px; padding: 1px 4px; border-radius: 4px;
+    background: rgba(0,0,0,0.22); font-weight: bold; white-space: nowrap;
+  }
+  .playing-btn .pb-name {
+    flex: 1; font-size: 11px; font-weight: bold;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .playing-btn .pb-close {
+    flex: 0 0 auto; font-size: 14px; font-weight: bold; opacity: 0.85; line-height: 1;
+    padding: 0 2px;
+  }
+  .playing-btn .pb-close:hover { color: #ffecec; opacity: 1; }
+
+  /* 快捷键设置弹窗 */
+  .sc-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; display: flex; align-items: center; justify-content: center; }
+  .sc-modal { width: 90%; max-width: 820px; height: 80vh; background: var(--container); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.4); }
+  .sc-mh { padding: 12px 16px; background: var(--header); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .sc-mh .title { font-size: 14px; font-weight: bold; color: var(--text); }
+  .sc-mh .tips { font-size: 11px; color: var(--textSecondary); }
+  .sc-mh .close { width: 30px; height: 26px; border: none; border-radius: 4px; cursor: pointer; background: transparent; color: var(--text); }
+  .sc-mh .close:hover { background: var(--buttonHover); }
+  .sc-mb { flex: 1; overflow: auto; padding: 12px 16px; }
+  .sc-mb::-webkit-scrollbar { width: 10px; }
+  .sc-mb::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+  .sc-mf { padding: 10px 16px; border-top: 1px solid var(--border); background: var(--header); display: flex; justify-content: flex-end; gap: 8px; }
+  .sc-mf .btn { padding: 7px 18px; }
+
+  /* 分类分组 */
+  .sc-group { background: var(--card); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 10px; overflow: hidden; }
+  .sc-gh { padding: 7px 12px; background: var(--header); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .sc-gh .n { flex: 1; font-size: 12px; font-weight: bold; color: var(--accent); }
+  .sc-gh .c { font-size: 10px; color: var(--textSecondary); padding: 1px 6px; border-radius: 8px; background: var(--input); }
+
+  /* 工具栏（开关） */
+  .sc-toolbar { padding: 8px 16px; background: var(--card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .sc-toolbar .sync-sw { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); cursor: pointer; user-select: none; }
+  .sc-toolbar .sync-sw input[type="checkbox"] { accent-color: var(--accent); transform: scale(1.05); }
+  .sc-toolbar .spacer { flex: 1; min-width: 8px; }
+  .sc-toolbar .tips-2 { font-size: 11px; color: var(--textSecondary); }
+  .sc-toolbar .sc-search { padding: 5px 10px; border: 1px solid var(--border, #4a4a4a); border-radius: 4px; background: var(--input, #2a2a2a); color: var(--text, #fff); font-size: 12px; min-width: 200px; outline: none; }
+  .sc-toolbar .sc-search:focus { border-color: var(--accent, #ff6b6b); }
+  .sc-toolbar .sc-search::placeholder { color: var(--textSecondary, #888); }
+  .sc-group.sc-group-hidden { display: none; }
+  .sc-row.sc-row-hidden { display: none; }
+  .sc-no-result { color: var(--textSecondary, #888); text-align: center; padding: 30px; font-size: 13px; }
+
+  /* 快捷键行：序号 | 名称 | 按键捕获按钮 | 颜色选择 | 绑定音乐 | 清除按钮 */
+  .sc-row { display: grid; grid-template-columns: 30px 1fr 220px 160px 170px 34px; gap: 8px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--border); }
+  .sc-row:last-child { border-bottom: none; }
+  .sc-row .idx { font-size: 11px; color: var(--textSecondary); text-align: center; }
+  .sc-row .pname { font-size: 12px; color: var(--text); word-break: break-all; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sc-row .bind-btn {
+    padding: 5px 8px; min-height: 26px;
+    border: 1px solid var(--border); border-radius: 4px;
+    background: var(--input); color: var(--textSecondary);
+    font-size: 11px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: all 0.15s;
+  }
+  .sc-row .bind-btn:hover { border-color: #4dabf7; color: #1c7ed6; background: rgba(77,171,247,0.08); }
+  .sc-row .bind-btn.has-bind { border-color: #40c057; color: #2f9e44; background: rgba(64,192,87,0.08); font-weight: bold; }
+
+  /* 按键捕获按钮（和主界面风格一致） */
+  .sc-row .shortcut-wrap { display: flex; align-items: center; gap: 4px; }
+  .sc-row .shortcut-capture {
+    padding: 5px 10px; min-width: 160px; max-width: 180px;
+    border: 1px solid var(--border); border-radius: 4px;
+    background: var(--input); color: var(--text);
+    font-size: 11px; font-weight: bold; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sc-row .shortcut-capture:hover { border-color: var(--accent); }
+  .sc-row .shortcut-capture.recording {
+    background: rgba(255,107,107,0.2);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .sc-row .shortcut-capture.err {
+    color: var(--danger);
+    border-color: var(--danger);
+  }
+  .sc-row .shortcut-wrap .conflict-tag,
+  .sc-row .shortcut-wrap .warn-tag {
+    display: inline-block; padding: 2px 6px; border-radius: 4px;
+    font-size: 10px; font-weight: bold; white-space: nowrap;
+  }
+  .sc-row .shortcut-wrap .conflict-tag { background: var(--danger); color: #fff; }
+  .sc-row .shortcut-wrap .warn-tag { background: var(--warning); color: #1a1a1a; }
+
+  .sc-row .color-wrap { display: flex; align-items: center; gap: 4px; }
+  .sc-row .color-wrap label { font-size: 11px; color: var(--textSecondary); }
+  .sc-row .color-wrap input[type="color"] { width: 28px; height: 24px; border: 1px solid var(--border); border-radius: 4px; padding: 0; background: transparent; cursor: pointer; }
+  .sc-row .color-wrap button { padding: 2px 6px; border: 1px solid var(--border); border-radius: 3px; background: var(--button); color: var(--textSecondary); font-size: 10px; cursor: pointer; }
+  .sc-row .color-wrap button:hover { background: var(--buttonHover); }
+  .sc-row .clear-btn { width: 24px; height: 24px; border: none; border-radius: 4px; background: transparent; color: var(--textSecondary); font-size: 16px; cursor: pointer; line-height: 1; }
+  .sc-row .clear-btn:hover { background: var(--buttonHover); color: var(--danger); }
+  .sc-row .conflict-tip { grid-column: 2 / -1; font-size: 10px; color: var(--danger); padding-bottom: 4px; }
+
+  /* ============ 绑定音乐选择弹窗 ============ */
+  .bm-group { margin: 8px 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--card); }
+  .bm-gh { padding: 6px 12px; background: var(--header); border-bottom: 1px solid var(--border); font-size: 12px; font-weight: bold; color: var(--accent); }
+  .bm-gl { padding: 6px 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 4px 8px; }
+  .bm-item {
+    display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 4px;
+    font-size: 12px; cursor: pointer; transition: all 0.15s; border: 1px solid transparent;
+  }
+  .bm-item:hover { background: var(--buttonHover); }
+  .bm-item.selected { background: rgba(64,192,87,0.15); border-color: #40c057; color: #2f9e44; font-weight: bold; }
+  .bm-item .bm-chk {
+    flex: 0 0 auto; width: 14px; height: 14px; border-radius: 3px;
+    border: 1px solid var(--border); background: var(--input); display: inline-block;
+  }
+  .bm-item.selected .bm-chk { background: #40c057; border-color: #40c057; position: relative; }
+  .bm-item.selected .bm-chk::after { content: ''; position: absolute; left: 3px; top: 0px; width: 4px; height: 8px; border-right: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(45deg); }
+  .bm-item .bm-idx { font-size: 10px; color: var(--textSecondary); min-width: 26px; }
+  .bm-item .bm-name { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bm-item.selected .bm-name { color: inherit; }
+
+  /* ============ 互斥保护多选弹窗 ============ */
+  .pm-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+  .pm-modal { width: 90%; max-width: 680px; max-height: 78vh; background: var(--container); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.4); }
+  .pm-mh { padding: 10px 16px; background: var(--header); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .pm-mh .title { font-size: 14px; font-weight: bold; color: var(--text); }
+  .pm-mh .tips { font-size: 11px; color: var(--textSecondary); margin-left: 10px; }
+  .pm-mh .close { width: 28px; height: 24px; border: none; border-radius: 4px; cursor: pointer; background: transparent; color: var(--text); }
+  .pm-mh .close:hover { background: var(--buttonHover); }
+  .pm-toolbar { padding: 8px 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); background: var(--card); }
+  .pm-toolbar .search { flex: 1; padding: 5px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--input); color: var(--text); font-size: 12px; outline: none; }
+  .pm-toolbar .search:focus { border-color: var(--accent); }
+  .pm-toolbar .sel-btn { padding: 4px 10px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: var(--button); color: var(--text); cursor: pointer; font-weight: bold; }
+  .pm-toolbar .sel-btn:hover { background: var(--buttonHover); }
+  .pm-toolbar .sel-btn.protect-all { border-color: var(--info); color: var(--info); }
+  .pm-mb { flex: 1; overflow: auto; padding: 10px 16px; }
+  .pm-mb::-webkit-scrollbar { width: 10px; }
+  .pm-mb::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+  .pm-group { background: var(--card); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
+  .pm-gh { padding: 6px 12px; background: var(--header); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: bold; color: var(--accent); }
+  .pm-gh .gt { font-size: 10px; color: var(--textSecondary); padding: 1px 5px; border-radius: 8px; background: var(--input); font-weight: normal; }
+  .pm-gh .gc { margin-left: auto; font-size: 10px; color: var(--textSecondary); }
+  .pm-items { padding: 6px 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 8px; }
+  .pm-item {
+    display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px;
+    font-size: 12px; cursor: pointer; transition: background 0.15s;
+  }
+  .pm-item:hover { background: var(--buttonHover); }
+  .pm-item input[type="checkbox"] { accent-color: var(--accent); }
+  .pm-item .pi-no { font-size: 10px; color: var(--textSecondary); min-width: 22px; }
+  .pm-item .pi-nm { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pm-item .pi-cat { font-size: 9px; padding: 1px 4px; border-radius: 4px; background: var(--input); color: var(--textSecondary); }
+  .pm-mf { padding: 10px 16px; border-top: 1px solid var(--border); background: var(--header); display: flex; justify-content: flex-end; gap: 8px; }
+  .pm-mf .btn { padding: 7px 18px; }
+
+  /* 内容方块自定义颜色覆盖：通过 data-style 行内样式已设置；这里加选中自定义色时的边框样式 */
+  .item-block.custom-color { border: 1px dashed rgba(255,255,255,0.5); }
+</style>
+
+  <!-- ===== I18N 国际化（语言包 + 核心 + 初始化 + 主进程语言同步） ===== -->
+  <script src="./js/i18n/zh-CN.js"></script>
+  <script src="./js/i18n/en-US.js"></script>
+  <script src="./js/i18n/ja-JP.js"></script>
+  <script src="./js/i18n/ko-KR.js"></script>
+  <script src="./js/i18n/fr-FR.js"></script>
+  <script src="./js/i18n/de-DE.js"></script>
+  <script src="./js/i18n/es-ES.js"></script>
+  <script src="./js/i18n/ru-RU.js"></script>
+  <script src="./js/i18n.js"></script>
+  <script>
+    (function () {
+      function applyLang(code) {
+        try { localStorage.setItem('appLanguage', code || 'zh-CN'); } catch (_) {}
+        try {
+          if (window.I18N && typeof window.I18N.changeLanguage === 'function') {
+            window.I18N.changeLanguage(code || 'zh-CN');
+            // 子窗口启动翻译完成后立即关闭 MutationObserver，避免运行时开销
+            // （ARTNET 触发等窗口的 UDP 数据频繁修改 textContent 会触发 mutation，关闭后无此开销）
+            // 主窗口不调此函数，保留其 observer 用于自动翻译右键菜单等动态内容
+            if (typeof window.I18N.shutdownObserver === 'function') window.I18N.shutdownObserver();
+          }
+        } catch (_) {}
+      }
+      try {
+        const saved = localStorage.getItem('appLanguage') || 'zh-CN';
+        if (saved !== 'zh-CN') {
+          if (document.body) applyLang(saved);
+          else window.addEventListener('DOMContentLoaded', function () { applyLang(saved); });
+        }
+      } catch (_) {}
+      try {
+        require('electron').ipcRenderer.on('language-data', function (event, langCode) {
+          if (document.body) applyLang(langCode);
+          else window.addEventListener('DOMContentLoaded', function () { applyLang(langCode); });
+        });
+      } catch (_) {}
+    })();
+  </script>
+</head>
+<body>
+<!-- ============ 全局错误捕获（在任何脚本执行之前注册） ============ -->
+<script>
+(function(){
+  function showErrBanner(type, msg, stack){
+    try{
+      var txt = '[' + type + '] ' + (msg || '未知错误');
+      if(stack) txt += '\n' + stack.toString().slice(0, 1500);
+      var b = document.createElement('div');
+      b.style.cssText = 'position:sticky;top:0;left:0;right:0;z-index:999999;padding:10px 14px;font-size:13px;font-weight:700;color:#7f1d1d;background:#fee2e2;border-bottom:2px solid #fca5a5;white-space:pre-wrap;word-break:break-all;font-family:monospace;';
+      b.textContent = txt;
+      if(document.body) document.body.insertBefore(b, document.body.firstChild);
+      else document.documentElement.appendChild(b);
+    }catch(_){ try{ alert('['+type+'] ' + msg); }catch(__){} }
+  }
+  window.addEventListener('error', function(e){
+    showErrBanner('window.error', (e.message||''), (e.error && e.error.stack || e.error || ''));
+  });
+  window.addEventListener('unhandledrejection', function(e){
+    showErrBanner('Promise未捕获', (e.reason && e.reason.message || e.reason || ''));
+  });
+})();
+</script>
+<div class="app">
+  <!-- 标题栏 -->
+  <div class="titlebar">
+    <div class="title">
+      <span class="status-dot" id="connDot"></span>
+      连接控台
+    </div>
+    <div class="win-ctrls">
+      <button onclick="sendCtrl('minimize')" title="最小化">&#8211;</button>
+      <button onclick="sendCtrl('maximize')" title="最大化">&#9633;</button>
+      <button class="close" onclick="sendCtrl('close')" title="关闭">&#10005;</button>
+    </div>
+  </div>
+
+  <!-- 顶部连接条 -->
+  <!-- 协议解析告警（过路由器分片/坏包时直接显示给用户，不用开 DevTools）-->
+  <div id="protoToast" style="position: sticky; top: 0; z-index: 999; display:none; padding: 8px 14px; font-size: 12px; font-weight: 600; background: #fff3cd; color: #664d03; border-bottom: 1px solid #ffecb5;"></div>
+  <div class="conn-bar">
+    <span class="lb">控台IP</span>
+    <input type="text" id="ipInput" placeholder="192.168.1.80" value="192.168.1.80">
+    <span class="pill gray" id="connPill">未连接</span>
+    <button class="btn btn-primary" id="connectBtn" onclick="try{ if(typeof doConnect==='function') doConnect(); else alert('连接控台脚本加载失败，请先关掉这个窗口重新打开一次（doConnect 未定义）'); }catch(e){ alert('连接失败：'+(e&&e.message||e)); }">连接</button>
+    <button class="btn btn-danger" id="disconnectBtn" onclick="try{ if(typeof doDisconnect==='function') doDisconnect(); else alert('脚本加载失败（doDisconnect 未定义）'); }catch(e){ alert('断开失败：'+(e&&e.message||e)); }" disabled>断开</button>
+    <button class="btn btn-default" onclick="try{ if(typeof doQueryPlaylists==='function') doQueryPlaylists(); else alert('脚本加载失败（doQueryPlaylists 未定义）'); }catch(e){ alert('刷新失败：'+(e&&e.message||e)); }" title="刷新播放列表（过路由器空白时点我）">刷新</button>
+    <button class="btn btn-default" onclick="try{ if(typeof doForceReloginAndQuery==='function') doForceReloginAndQuery(); else alert('脚本加载失败（doForceReloginAndQuery 未定义）'); }catch(e){ alert('重登失败：'+(e&&e.message||e)); }" title="强制重新登录+查询（一直空白时点这个最快）">强制重登+查</button>
+    <button class="btn btn-default" onclick="try{ if(typeof openShortcutModal==='function') openShortcutModal(); else alert('脚本加载失败（openShortcutModal 未定义）'); }catch(e){ alert('快捷键失败：'+(e&&e.message||e)); }" title="快捷键设置">快捷键</button>
+    <label class="sc-toggle-wrap" title="开启后即使软件不在最前面，控台快捷键也能全局触发">
+      <input type="checkbox" id="consoleScToggle">
+      <span class="sc-toggle-label">全局快捷键</span>
+      <span class="sc-toggle-status" id="consoleScStatus">已关闭</span>
+    </label>
+    <button class="btn btn-default" onclick="try{ if(typeof openAiTriggerModal==='function') openAiTriggerModal(); else alert('AI触发配置加载失败（openAiTriggerModal 未定义）'); }catch(e){ alert('AI触发失败：'+(e&&e.message||e)); }" title="AI触发设置">AI触发</button>
+    <label class="sc-toggle-wrap" title="开启后播放音乐时自动分析音频并触发控台场景">
+      <input type="checkbox" id="aiTriggerToggle">
+      <span class="sc-toggle-label">AI触发</span>
+      <span class="sc-toggle-status off" id="aiTriggerStatus">已关闭</span>
+    </label>
+  </div>
+
+  <!-- 正在播放区域（置顶固定，始终显示在最上面） -->
+  <div id="playingSection"></div>
+
+  <!-- 分类内容区 -->
+  <div class="scroll" id="mainScroll">
+    <div id="playlistsBox"></div>
+  </div>
+</div>
+
+<script>
+  const { ipcRenderer } = require('electron');
+  const net = require('net');
+
+  // ========== 主题系统（含播放状态色，与index.html音乐按钮一致）==========
+  // 停止状态：用各主题的 accent 色，字体用高对比深色（保证可读性）
+  // 播放状态：统一绿色 #2e7d32；暂停状态：统一橙色 #e65100
+  const themes = {
+    dark: { body:'#1a1a1a', container:'#2a2a2a', header:'#3a3a3a', accent:'#ff6b6b', text:'#ffffff', textSecondary:'#aaaaaa', card:'#3a3a3a', cardHover:'#5a5a5a', input:'#4a4a4a', button:'#4a4a4a', buttonHover:'#5a5a5a', border:'#4a4a4a', playing:'#2e7d32', playingText:'#ffffff', paused:'#e65100', pausedText:'#ffffff', stopped:'#ff6b6b', stoppedText:'#1a1a1a' },
+    light: { body:'#f5f5f5', container:'#ffffff', header:'#f0f0f0', accent:'#ff6b6b', text:'#000000', textSecondary:'#333333', card:'#f0f0f0', cardHover:'#e0e0e0', input:'#e0e0e0', button:'#e0e0e0', buttonHover:'#d0d0d0', border:'#e0e0e0', playing:'#2e7d32', playingText:'#000000', paused:'#e65100', pausedText:'#000000', stopped:'#ff6b6b', stoppedText:'#1a1a1a' },
+    cute: { body:'#ffe6f2', container:'#ffffff', header:'#ffccdd', accent:'#ff6699', text:'#000000', textSecondary:'#333333', card:'#ffeeee', cardHover:'#ffdddd', input:'#ffeeee', button:'#ffccdd', buttonHover:'#ffb3cc', border:'#ffccdd', playing:'#2e7d32', playingText:'#000000', paused:'#e65100', pausedText:'#000000', stopped:'#ff6699', stoppedText:'#1a1a1a' },
+    cool: { body:'#1a1a1a', container:'#2a2a2a', header:'#3a3a3a', accent:'#ff6b35', text:'#ffffff', textSecondary:'#e0e0e0', card:'#222222', cardHover:'#3a3a3a', input:'#4a4a4a', button:'#4a4a4a', buttonHover:'#5a5a5a', border:'#ff6b35', playing:'#2e7d32', playingText:'#ffffff', paused:'#e65100', pausedText:'#ffffff', stopped:'#ff6b35', stoppedText:'#1a1a1a' },
+  };
+  function applyTheme(name) {
+    const t = themes[name] || themes.dark;
+    const r = document.documentElement;
+    r.style.setProperty('--body', t.body); r.style.setProperty('--container', t.container);
+    r.style.setProperty('--header', t.header); r.style.setProperty('--accent', t.accent);
+    r.style.setProperty('--text', t.text); r.style.setProperty('--textSecondary', t.textSecondary);
+    r.style.setProperty('--card', t.card); r.style.setProperty('--cardHover', t.cardHover);
+    r.style.setProperty('--input', t.input); r.style.setProperty('--button', t.button);
+    r.style.setProperty('--buttonHover', t.buttonHover); r.style.setProperty('--border', t.border);
+    r.style.setProperty('--playing', t.playing); r.style.setProperty('--playingText', t.playingText);
+    r.style.setProperty('--paused', t.paused); r.style.setProperty('--pausedText', t.pausedText);
+    // 停止状态用主题色，字体高对比深色
+    r.style.setProperty('--stopped', t.accent); r.style.setProperty('--stoppedText', t.stoppedText);
+  }
+
+  // ==================== 启动期立即执行（绝对不允许 throw，任何异常直接写页面顶部红条） ====================
+  // 这里只放"一打开窗口就立刻执行的语句"；绝对不能放函数/常量声明（否则会被限定在 IIFE 作用域内，按钮 onclick 找不到函数）
+  (function bootStartupOnly(){
+    try {
+      // 1) 主题兜底：先默认 dark，再覆盖用户保存的
+      try { applyTheme('dark'); } catch(_) {}
+      try {
+        var s = localStorage.getItem('musicControllerTheme');
+        if (s && themes[s]) applyTheme(s);
+      } catch(_) {}
+      // 2) 主题同步 IPC 监听（主界面切主题时通知这个窗口）
+      try {
+        ipcRenderer.on('theme-data', function(e, name){
+          if (themes[name]) { try { applyTheme(name); } catch(_1){} try { localStorage.setItem('musicControllerTheme', name); } catch(_2){} }
+        });
+      } catch(_) {}
+      // 3) 恢复上次保存的控台 IP（填充输入框）
+      try {
+        var savedIp = localStorage.getItem('consoleConnectIp');
+        if (savedIp) {
+          var inputEl = document.getElementById('ipInput');
+          if (inputEl) inputEl.value = savedIp;
+        }
+      } catch(_) {}
+    } catch(bootErr) {
+      try {
+        var errText = (bootErr && (bootErr.stack || bootErr.message) || String(bootErr) || '未知错误').toString().slice(0, 1000);
+        var banner = document.createElement('div');
+        banner.style.cssText = 'position:sticky;top:0;z-index:99999;padding:12px 18px;font-size:13px;font-weight:700;color:#7f1d1d;background:#fee2e2;border-bottom:2px solid #fca5a5;white-space:pre-wrap;word-break:break-all;';
+        banner.textContent = '⚠️ 连接控台启动错误（主题/配置读取阶段）。请关掉窗口后重新打开。\n错误详情：' + errText;
+        try {
+          if (document.body && document.body.firstChild) document.body.insertBefore(banner, document.body.firstChild);
+          else if (document.body) document.body.appendChild(banner);
+          else document.documentElement.appendChild(banner);
+        } catch(_2) {}
+      } catch(_fatal) { try { alert('连接控台启动错误：' + (bootErr && bootErr.message || String(bootErr))); } catch(_g) {} }
+    }
+  })();
+
+  // ========== 窗口控制 ==========
+  function sendCtrl(a) { ipcRenderer.send('console-window-control', a); }
+
+  // ========== 远程控制 API：控台快照推送（节流 + 订阅事件） ==========
+  let _snapshotTimer = null;
+  function snapshotNow() {
+    try {
+      const ipInput = document.getElementById('ipInput');
+      const categories = (playlists || []).map(cat => {
+        const rawItems = cat.playItemList || cat.items || [];
+        const items = rawItems.map(it => {
+          const pid = String(it.playId);
+          // 从 consoleShortcuts 获取用户设置的颜色
+          let color = '';
+          try {
+            const cfg = consoleShortcuts && consoleShortcuts.get(pid);
+            if (cfg && cfg.color) color = cfg.color;
+          } catch(_) {}
+          return {
+            playId: it.playId,
+            name: it.playName || it.name || '',
+            status: typeof it.playState === 'number' ? it.playState : (typeof it.status === 'number' ? it.status : 0),
+            color: color,
+            protected: protectedPlayIds ? protectedPlayIds.has(pid) : false,
+          };
+        });
+        const catType = typeof cat.playType === 'number' ? cat.playType : (typeof cat.type === 'number' ? cat.type : 0);
+        return {
+          listId: cat.listId,
+          name: cat.listName || cat.name || '',
+          type: catType,
+          typeName: groupTypeNames[catType] || '分类',
+          count: items.length,
+          items: items,
+        };
+      });
+      const playingItems = [];
+      for (const cat of (playlists || [])) {
+        const rawItems = cat.playItemList || cat.items || [];
+        const catName = cat.listName || cat.name || '';
+        for (const it of rawItems) {
+          const st = typeof it.playState === 'number' ? it.playState : (typeof it.status === 'number' ? it.status : 0);
+          if (st === 1 || st === 2) {
+            playingItems.push({
+              playId: it.playId,
+              catName: catName,
+              name: it.playName || it.name || '',
+              status: st,
+              protected: protectedPlayIds ? protectedPlayIds.has(String(it.playId)) : false,
+            });
+          }
+        }
+      }
+      const faders = [];
+      for (const cat of (playlists || [])) {
+        const catType = typeof cat.playType === 'number' ? cat.playType : (typeof cat.type === 'number' ? cat.type : 0);
+        if (catType !== 5) continue;
+        const rawItems = cat.playItemList || cat.items || [];
+        const catName = cat.listName || cat.name || '';
+        for (const fd of rawItems) {
+          const val = typeof fd.playProgress === 'number' ? fd.playProgress : (typeof fd.value === 'number' ? fd.value : 0);
+          faders.push({ playId: fd.playId, name: fd.playName || fd.name || catName, value: val });
+        }
+      }
+      const snap = {
+        connected: !!connected,
+        ip: ipInput ? (ipInput.value || '').toString().trim() : '',
+        categories: categories,
+        playingItems: playingItems,
+        faders: faders,
+        sceneMutexEnabled: !!sceneMutexEnabled,
+        protectedPlayIds: protectedPlayIds ? Array.from(protectedPlayIds) : [],
+      };
+      ipcRenderer.send('console-snapshot-push', snap);
+    } catch (_) {}
+  }
+  function scheduleSnapshot() {
+    try {
+      if (_snapshotTimer) return;
+      _snapshotTimer = setTimeout(() => {
+        try { _snapshotTimer = null; snapshotNow(); } catch (_) {}
+      }, 150);
+    } catch (_) {}
+  }
+  // 监听远程控制指令
+  try {
+    ipcRenderer.on('console-remote-cmd', function(e, cmd){
+      try {
+        if (!cmd || !cmd.action) return;
+        const a = cmd.action;
+        if (a === 'play' || a === 'stop' || a === 'pause') {
+          // 播放/停止/暂停 节目：参数：playId
+          const pid = cmd.playId !== undefined ? String(cmd.playId) : null;
+          if (!pid) return;
+          // 找到对应 item（playlists 用 playItemList 字段）
+          let found = null;
+          for (const cat of (playlists || [])) {
+            const rawItems = cat.playItemList || cat.items || [];
+            for (const it of rawItems) {
+              if (String(it.playId) === pid) { found = { cat, it }; break; }
+            }
+            if (found) break;
+          }
+          if (!found) return;
+          const controlType = (a === 'play' || a === 'pause') ? 1 : 4; // 1=播放/暂停 4=停止
+          // 构造与正常点击一致的 selectedPlayItem 结构
+          selectedPlayItem = {
+            playListId: found.cat.listId,
+            playListName: found.cat.listName || found.cat.name || '',
+            playType: found.it.playType,
+            playId: found.it.playId,
+            playName: found.it.playName || found.it.name || ''
+          };
+          sendPlayControl(controlType);
+          // 乐观更新本地状态（与正常点击一致：设备推送会再次确认）
+          found.it.playState = (controlType === 1) ? 1 : 0;
+          // 如果是播放指令，触发场景互斥（延迟0.15s关其他未保护项）
+          if (controlType === 1) applySceneMutexAfter(found.it.playId);
+          // 通知主界面同步绑定音乐
+          if (!syncPlayFromMainInProgress) notifyMainMusicByPlayId(found.it.playId, controlType);
+          renderPlaylists();
+          scheduleSnapshot();
+        } else if (a === 'stopAll') {
+          // 一键停止全部正在播放（直接调用函数，避免 disabled 按钮点击无效）
+          if (typeof stopAllPlaying === 'function') stopAllPlaying();
+          scheduleSnapshot();
+        } else if (a === 'toggleMutex') {
+          // 切换场景互斥开关
+          if (typeof toggleSceneMutex === 'function') toggleSceneMutex();
+          scheduleSnapshot();
+        } else if (a === 'fader' && cmd.playId !== undefined) {
+          // 设置推杆值：playId + value(0~255)
+          const pid = String(cmd.playId);
+          const val = Math.max(0, Math.min(255, parseInt(cmd.value, 10) || 0));
+          let fslider = document.querySelector(`.fader-block[data-play-id="${pid}"] .fader-vslider`);
+          if (!fslider) {
+            // 兼容选择器不一致：遍历所有推杆
+            const allSliders = document.querySelectorAll('.fader-block .fader-vslider');
+            for (let i = 0; i < allSliders.length; i++) {
+              const s = allSliders[i];
+              const blk = s.closest('.fader-block');
+              if (blk && blk.dataset && String(blk.dataset.playId) === pid) { fslider = s; break; }
+            }
+          }
+          if (fslider) {
+            const oldVal = fslider.value;
+            fslider.value = String(val);
+            if (oldVal !== String(val)) {
+              try {
+                const ev = document.createEvent('HTMLEvents');
+                ev.initEvent('input', true, true);
+                fslider.dispatchEvent(ev);
+                const ev2 = document.createEvent('HTMLEvents');
+                ev2.initEvent('change', true, true);
+                fslider.dispatchEvent(ev2);
+              } catch(_e) {}
+            }
+            scheduleSnapshot();
+          }
+        }
+      } catch (_) {}
+    });
+  } catch(_) {}
+  // 窗口加载完成后定时推送快照（每 2 秒兜底 + 状态变更立即推送）
+  document.addEventListener('DOMContentLoaded', function(){
+    try {
+      setInterval(scheduleSnapshot, 2000);
+    } catch(_) {}
+  });
+
+  // ========== 协议常量 ==========
+  const MSG_HEARTBEAT = 100;    // 0x64
+  const MSG_LOGIN = 1002;       // 0x3EA
+  const MSG_QUERY_LIST = 1003;  // 0x3EB
+  const MSG_PLAY_CTRL = 1004;   // 0x3EC
+  const MSG_VOLUME = 1005;      // 0x3ED
+
+  // 起始码
+  const START_CODE = [0xFA, 0xFB, 0xFC, 0xFD];
+
+  // ========== TCP 连接状态 ==========
+  let socket = null;
+  let connected = false;
+  let heartbeatTimer = null;
+  let recvBuf = Buffer.alloc(0);
+  let deviceInfo = null;
+  let playlists = [];
+  let selectedPlayItem = null;
+  let seqNum = 1;
+  // 需求5：控台是否加载过至少一次完整列表（防止控台未加载时把 localStorage 的保护列表、快捷键配置误清空）
+  let consoleDataLoadedOnce = false;
+
+  // ========== 协议打包/解包 ==========
+  // 16字节固定头部：startCode(4) + version(1) + reserved(1) + seqNum(2) + msgNum(2) + respone(1) + dataType(1) + msgBodyLen(4)
+  function packMessage(msgNum, bodyObj) {
+    const bodyStr = JSON.stringify(bodyObj || {});
+    const bodyBuf = Buffer.from(bodyStr, 'utf-8');
+    const header = Buffer.alloc(16);
+    header[0] = 0xFA; header[1] = 0xFB; header[2] = 0xFC; header[3] = 0xFD; // startCode
+    header[4] = 0x01; // version
+    header[5] = 0x00; // reserved
+    header.writeUInt16BE(seqNum++, 6); // seqNum
+    header.writeInt16BE(msgNum, 8);     // msgNum (有符号)
+    header[10] = 0x00; // respone: 0x00=请求/主动发起
+    header[11] = 0x01; // dataType: 0x01=json
+    header.writeUInt32BE(bodyBuf.length, 12); // msgBodyLen
+    return Buffer.concat([header, bodyBuf]);
+  }
+
+  // 协议解析安全阈值（防路由器下分片/坏包/粘包导致 recvBuf 无限涨 + CPU 100% 卡死界面）
+  const MAX_BODY_LEN = 200 * 1024;       // 单条消息 body 最大 200KB（控台 JSON 一般不超过几十 KB）
+  const MAX_RECVBUF_LEN = 2 * 1024 * 1024; // recvBuf 超过 2MB 直接重置（说明解析异常）
+  const MAX_PARSE_ITERS = 2000;            // 每条解析链路最多 2000 次；超过就直接清空（防 JS 循环慢）
+  const MAX_GARBAGE_BYTES = 2 * 1024;      // 连续找不到 startCode ≥2KB → 判定路由器拼错脏数据，全丢
+  const _START_BUF = Buffer.from(START_CODE);
+  let _protoNoticeTimer = null;
+  function showProtoNotice(text, type, seconds){
+    try {
+      const box = document.getElementById('protoToast');
+      if (!box) return;
+      type = type || 'warn';
+      seconds = seconds || 8;
+      if (type === 'warn') { box.style.background = '#fff3cd'; box.style.color = '#664d03'; box.style.borderBottomColor = '#ffecb5'; }
+      else if (type === 'err') { box.style.background = '#f8d7da'; box.style.color = '#842029'; box.style.borderBottomColor = '#f5c2c7'; }
+      else { box.style.background = '#cff4fc'; box.style.color = '#055160'; box.style.borderBottomColor = '#b6effb'; }
+      box.textContent = text + '（若长时间仍无内容：请点 断开 → 再点 连接，重连后立即刷新）';
+      box.style.display = 'block';
+      if (_protoNoticeTimer) clearTimeout(_protoNoticeTimer);
+      _protoNoticeTimer = setTimeout(()=>{ try{ box.style.display='none'; }catch(_){} }, seconds * 1000);
+    } catch(_) {}
+  }
+
+  // 从接收缓冲区解析消息（16字节头部）——路由器稳定性 v2：用 Buffer.indexOf 原生搜索 + 大块垃圾直接截掉
+  function tryParseMessages() {
+    // ① 全局上限：累积缓冲超过 2MB 直接清空 —— 加路由器后 MTU 变小，分片错位会把包切成两半混着垃圾
+    if (recvBuf.length > MAX_RECVBUF_LEN) {
+      try { console.warn('recvBuf oversize:', recvBuf.length, 'reset buffer'); } catch(_) {}
+      showProtoNotice('已接收 ' + Math.round(recvBuf.length/1024) + 'KB 异常数据并自动重置（网络分包错位）', 'err', 10);
+      recvBuf = Buffer.alloc(0);
+      return [];
+    }
+    const msgs = [];
+    let off = 0;
+    let iters = 0;
+    let lastHitStart = 0;
+    while (true) {
+      iters++;
+      if (iters > MAX_PARSE_ITERS) {
+        try { console.warn('tryParseMessages MAX_PARSE_ITERS hit, off=', off); } catch(_) {}
+        showProtoNotice('协议解析异常：重试次数超限，已丢弃一段缓冲（建议点断开再连接）', 'err', 10);
+        recvBuf = Buffer.alloc(0);
+        return msgs;
+      }
+      if (recvBuf.length - off < 16) break; // 剩余不够一个固定头：退出等下一次 data
+      if (off - lastHitStart > MAX_GARBAGE_BYTES) {
+        try { console.warn('protocol garbage >=', (off-lastHitStart), 'bytes, truncate'); } catch(_) {}
+        showProtoNotice('丢弃 ' + Math.round((off-lastHitStart)/1024) + 'KB 脏数据（非控台协议内容）', 'warn', 8);
+        recvBuf = recvBuf.slice(off);
+        return msgs;
+      }
+      const idx = recvBuf.indexOf(_START_BUF, off);
+      if (idx === -1) {
+        // 整个剩下的缓冲里都找不到 startCode：保留尾 3 字节（FD 前 3 字节可能已到，最后 1 字节还在下一段）
+        const keepTail = Math.min(3, recvBuf.length);
+        // 诊断用：把缓冲前 12 字节打印给用户看（开了 toLocaleString 的）
+        const preview = recvBuf.length >= 12 ? recvBuf.slice(0,12) : recvBuf;
+        const hexPreview = preview.toString('hex').match(/.{1,2}/g).join(' ');
+        try { console.warn('startCode not found in whole buf (' + recvBuf.length + 'B), previewBytes=' + hexPreview + ', keep last', keepTail, 'bytes'); } catch(_) {}
+        showProtoNotice('未找到控台帧头（收到 ' + recvBuf.length + 'B，前 12 字节：' + hexPreview + '）。若多次出现：请先断开→再连接，或确认控台 IP/端口是否对。', 'warn', 10);
+        recvBuf = keepTail > 0 ? recvBuf.slice(recvBuf.length - keepTail) : Buffer.alloc(0);
+        return msgs;
+      }
+      if (idx !== off) off = idx; // 跳过中间一段脏字节，直接落到帧头
+      lastHitStart = off;
+      if (recvBuf.length - off < 16) break; // 不够头，退出等下一次 data
+      const sn = recvBuf.readUInt16BE(off + 6);
+      const msgNum = recvBuf.readInt16BE(off + 8);
+      const resp = recvBuf[off + 10];
+      const dataType = recvBuf[off + 11];
+      const bodyLen = recvBuf.readUInt32BE(off + 12);
+
+      // ② bodyLen 校验：0 <= bodyLen <= MAX_BODY_LEN
+      if (bodyLen < 0 || bodyLen > MAX_BODY_LEN) {
+        // 读到几 MB 垃圾值 → 帧头被错位命中（纯巧合），前进 1 字节重搜下一个 startCode
+        try { console.warn('bad bodyLen:', bodyLen, 'msgNum:', msgNum, 'skip from', off); } catch(_) {}
+        off += 1;
+        continue;
+      }
+      if (recvBuf.length - off < 16 + bodyLen) {
+        // 包还没收齐：跳出，等下一次 data
+        break;
+      }
+      const bodyBuf = recvBuf.slice(off + 16, off + 16 + bodyLen);
+      let body = {};
+      try { body = JSON.parse(bodyBuf.toString('utf-8')); } catch(e) {
+        // JSON 解析失败：帧头被错位命中或 body 被破坏，前进 1 字节重搜下一个 startCode
+        try { console.warn('JSON parse fail, msgNum:', msgNum, 'len:', bodyLen); } catch(_) {}
+        off += 1;
+        continue;
+      }
+      msgs.push({ msgNum, seqNum: sn, respone: resp, dataType, body, _bodyLen: bodyLen });
+      off += 16 + bodyLen;
+    }
+    // ③ 截断缓冲：off>0 就把前面消费掉/无效字节切掉
+    if (off > 0) recvBuf = recvBuf.slice(off);
+    if (msgs.length > 0) {
+      try {
+        const sample = msgs.slice(0, 5).map(m => '#'+m.msgNum+'(bodyLen=' + (m._bodyLen||0) + ',dataType=' + m.dataType + ')').join(' ');
+        console.log('[PARSE OK] this batch ' + msgs.length + ' msgs: ' + sample);
+      } catch(_) {}
+    }
+    return msgs;
+  }
+
+  // ========== 消息发送 ==========
+  function sendMessage(msgNum, bodyObj) {
+    if (!socket || !connected) return false;
+    try {
+      const buf = packMessage(msgNum, bodyObj);
+      socket.write(buf);
+      return true;
+    } catch(e) {
+      return false;
+    }
+  }
+
+  // ========== 消息处理 ==========
+  // 自动刷新节流（避免短时间内重复查询）
+  let autoRefreshTimer = null;
+  function scheduleAutoRefresh() {
+    if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
+    autoRefreshTimer = setTimeout(() => {
+      autoRefreshTimer = null;
+      if (connected) sendMessage(MSG_QUERY_LIST, {});
+    }, 300);
+  }
+
+  // 查询播放列表的"500ms 内没收到 1003 响应就重试一次"机制（路由器偶丢 1003 包会导致永远空白）
+  let queryRetryTimer = null;
+  function clearQueryRetry(){ if(queryRetryTimer){ clearTimeout(queryRetryTimer); queryRetryTimer = null; } }
+  function scheduleQueryRetry(){
+    clearQueryRetry();
+    queryRetryTimer = setTimeout(() => {
+      queryRetryTimer = null;
+      if (connected) {
+        try { console.warn('[QUERY RETRY] 500ms 未收到 1003 响应，自动重发 MSG_QUERY_LIST（过路由器防止丢包空白）'); } catch(_) {}
+        showProtoNotice('查询响应未收到，自动重试一次...', 'warn', 4);
+        sendMessage(MSG_QUERY_LIST, {});
+      }
+    }, 500);
+  }
+
+  // 从控台返回对象里（可能在 body/body.data/body.result 中）找出播放列表数组（兼容所有常见命名）
+  function pickPlaylistArray(obj){
+    if(!obj || typeof obj !== 'object') return null;
+    const candidates = ['playLists','playlists','playlist','lists','list','items','data','result'];
+    for(const k of candidates){ if(Array.isArray(obj[k])) return obj[k]; }
+    for(const k of Object.keys(obj)){ const v = obj[k]; if(Array.isArray(v) && v.length > 0) return v; }
+    return null;
+  }
+
+  function handleMessage(msg) {
+    const { msgNum, body } = msg;
+    try { console.log('[CONSOLE RECV MSG] msgNum=' + msgNum + ' dataType=' + msg.dataType + ' bodyKeys=' + Object.keys(body||{}).join(',')); } catch(_) {}
+    // 收到任何有效响应 → 取消"刷新查询重试"（避免重复发 1003）
+    if (msgNum === MSG_QUERY_LIST) clearQueryRetry();
+    switch (msgNum) {
+      case MSG_LOGIN: // 1002 - 登录响应（新增：用来排查登录被拒导致无内容）
+        try { console.log('[CONSOLE 1002 LOGIN] body=', JSON.stringify(body||{})); } catch(_) {}
+        // 控台对登录的响应。有些控台会直接推 playLists 在登录里，先尝试一并提取
+        try {
+          const inlineLists = pickPlaylistArray(body);
+          if (inlineLists && inlineLists.length > 0) {
+            playlists = inlineLists;
+            deviceInfo = body;
+            consoleDataLoadedOnce = true;
+            renderDeviceInfo();
+            renderPlaylists();
+            // 换控台兼容：登录响应直接带列表 → 归一AI触发playIds并推送给主窗口
+            setTimeout(function(){ try { if (typeof normalizeAiTriggerAfterPlaylistLoad === 'function') normalizeAiTriggerAfterPlaylistLoad(); } catch(_){} }, 100);
+          }
+        } catch(_) {}
+        // 有些控台版本 statusCode 用的是 code / status / ok / result
+        const code = body.statusCode ?? body.code ?? body.status ?? 0;
+        const ok = (code === 200 || code === 0 || code === 'OK' || code === true || body.success === true || body.ok === true || !code);
+        if (!ok) {
+          try {
+            const text = document.getElementById('connStatus');
+            if (text) text.textContent = '登录失败(' + (body.statusCode ?? body.code ?? body.status ?? '?') + ') ' + (body.message || body.msg || body.error || ' 检查密码/权限/控台协议版本');
+          } catch(_) {}
+        }
+        break;
+
+      case MSG_QUERY_LIST: // 1003 - 查询播放列表响应
+        try { console.log('[CONSOLE 1003 LIST] body sample=', JSON.stringify(body||{}).slice(0, 400)); } catch(_) {}
+        if (body) {
+          // 宽松兜底：无论 statusCode/code/status 是什么，只要能从 body/data/result 里拿出数组就直接用
+          // （有些控台返回 200、有些返回 0，还有些直接是数组不包 status，我们全都接受避免"连上但空白"）
+          const list1 = pickPlaylistArray(body);           // 顶层找
+          const list2 = body.data ? pickPlaylistArray(body.data) : [];
+          const list3 = body.result ? pickPlaylistArray(body.result) : [];
+          const arr = (list1 && list1.length) ? list1 : ((list2 && list2.length) ? list2 : list3);
+          deviceInfo = body.data || body.result || body;
+          // 如果一个都没找到：仍把 playlists 置为当前已有（空数组），保证不会被卡死
+          playlists = Array.isArray(arr) ? arr : (Array.isArray(playlists) ? playlists : []);
+          consoleDataLoadedOnce = true; // 控台加载过至少一次完整列表（标志，用于需求5：保护列表/快捷键避免过早清理）
+          // 兜底：不要被包装函数的任何异常影响渲染，直接 try 两个版本（包装 + 原始），都不行再 fallback 重画
+          let rendered = false;
+          try {
+            renderPlaylists();
+            rendered = true;
+          } catch(e) {
+            try { console.error('renderPlayLists error, fallback to _origRenderPlaylists:', e); } catch(_) {}
+          }
+          if (!rendered) {
+            try {
+              if (typeof _origRenderPlaylists === 'function') _origRenderPlaylists.call(null);
+              else if (typeof window._origRenderPlaylists === 'function') window._origRenderPlaylists.call(null);
+            } catch(e2) {
+              try { console.error('fallback render also failed:', e2); } catch(_) {}
+            }
+          }
+          triggerRefreshFlash();
+          // 列表加载完成 → 用真实 playName/listId 重新注册一次全局快捷键（解决"录好快捷键，按下没反应"问题）
+          setTimeout(() => { try { registerAllShortcutsToMain(); } catch(_) {} }, 200);
+          // 换控台兼容：查询到新控台列表 → 归一AI触发playIds并推送给主窗口（防止旧控台勾选的playId带到新控台不生效）
+          setTimeout(function(){ try { if (typeof normalizeAiTriggerAfterPlaylistLoad === 'function') normalizeAiTriggerAfterPlaylistLoad(); } catch(_){} }, 300);
+        }
+        break;
+
+      case MSG_PLAY_CTRL: // 1004 - 播控响应/状态同步
+        // 设备主动推送的状态同步
+        if (body.playId !== undefined || body.controlType !== undefined) {
+          // controlType=7 名称变更，controlType=8 移动/复制/删除 → 需要重新查询列表
+          if (body.controlType === 7 || body.controlType === 8) {
+            scheduleAutoRefresh();
+          } else if (body.playId !== undefined) {
+            // 普通播放状态同步
+            updatePlayState(body);
+          }
+        }
+        break;
+
+      case MSG_VOLUME: // 1005 - 音量响应
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  // ========== 连接/断开 ==========
+  // 连接代次：解决「点两次连接/断了又连」的时候，老 socket 延迟回调覆盖新状态的问题
+  let socketEpoch = 0;
+  // 连接超时（毫秒）：IP错/端口没开时，Windows 默认 SYN 重试会等很久，3.5s 主动算失败
+  const CONNECT_TIMEOUT_MS = 3500;
+  let connectTimer = null;
+
+  function clearConnectTimer() {
+    if (connectTimer) { clearTimeout(connectTimer); connectTimer = null; }
+  }
+
+  function doConnect() {
+    const ip = document.getElementById('ipInput').value.trim();
+    const port = 8081;
+    if (!ip) return;
+    try { localStorage.setItem('consoleConnectIp', ip); } catch(e) {}
+
+    // 开始新连接：取消「用户主动断开」锁（因为是新的连接周期了）
+    userInitiatedDisconnect = false;
+
+    // 连接前先把上一次的 socket 彻底销毁（避免多次点连接导致回调错乱）
+    if (socket) {
+      try { socket.removeAllListeners(); socket.destroy(); } catch(e) {}
+      socket = null;
+    }
+    clearConnectTimer();
+    socketEpoch++;
+    const thisEpoch = socketEpoch;
+
+    setConnState('connecting');
+    const s = new net.Socket();
+    socket = s;
+
+    // 连接超时定时器：3.5s 还没 connect 回调，就判失败
+    connectTimer = setTimeout(() => {
+      if (socket === s) { // 仍然是本次 socket
+        try { s.removeAllListeners(); s.destroy(); } catch(e) {}
+        if (socket === s) socket = null;
+        connected = false;
+        setConnState('error');
+      }
+    }, CONNECT_TIMEOUT_MS);
+
+    try {
+      s.connect(port, ip, () => {
+        // 防老 socket 回调覆盖：如果这不是最新的一代就直接忽略并关掉自己
+        if (thisEpoch !== socketEpoch) {
+          try { s.removeAllListeners(); s.destroy(); } catch(e) {}
+          return;
+        }
+        // 连接成功：清掉超时
+        clearConnectTimer();
+        try { s.setTimeout(0); } catch(e) {}
+        connected = true;
+        setConnState('connected');
+        recvBuf = Buffer.alloc(0);
+        // 发送登录 (1002)
+        sendMessage(MSG_LOGIN, {
+          ukeyId: '',
+          password: '',
+          deviceId: 'MJ004' + Date.now().toString(16).toUpperCase()
+        });
+        startHeartbeat();
+        // 延迟1秒后查询播放列表（过路由器最容易第一次丢包 → 自动挂 500ms 重试）
+        setTimeout(() => {
+          if (socketEpoch === thisEpoch && connected) {
+            // 查询前先清空缓冲（防止路由器前面粘了一段和协议无关的数据一直卡着）
+            recvBuf = Buffer.alloc(0);
+            sendMessage(MSG_QUERY_LIST, {});
+            scheduleQueryRetry();
+          }
+        }, 1000);
+      });
+    } catch (e) {
+      try { s.removeAllListeners(); s.destroy(); } catch(e2) {}
+      if (socket === s) socket = null;
+      clearConnectTimer();
+      setConnState('error');
+      return;
+    }
+
+    s.on('data', (data) => {
+      if (thisEpoch !== socketEpoch) return; // 不是本代 socket，忽略
+      if (!socket || socket !== s) return;
+      try {
+        recvBuf = Buffer.concat([recvBuf, data]);
+        const msgs = tryParseMessages();
+        msgs.forEach(handleMessage);
+      } catch(e) {
+        try { console.error('socket data parse/handle error:', e && e.message || e); } catch(_) {}
+        // 解析/处理异常：清空接收缓冲重新开始，防止粘包死锁导致永远不显示内容
+        recvBuf = Buffer.alloc(0);
+      }
+    });
+
+    // 错误：连接被拒（端口没开/IP错）
+    s.on('error', (err) => {
+      clearConnectTimer();
+      // 如果是用户主动断开期间触发的 error：直接 ignore，不改状态（用户已经在 UI 上回到未连接了，不要跳回 error 把断开按钮锁死）
+      if (userInitiatedDisconnect) return;
+      if (thisEpoch !== socketEpoch) return;
+      // 只有仍在连接中/未连接时才标 error；已经断开了不回写 error
+      if (connected) return;
+      setConnState('error');
+    });
+
+    // 关闭：无论是 destroy、主动断开、被远端断开、还是超时后 destroy 都统一走 close
+    s.on('close', () => {
+      clearConnectTimer();
+      // 用户主动断开期间触发的 close：也不改状态，避免任何闪烁
+      if (userInitiatedDisconnect) return;
+      if (thisEpoch !== socketEpoch) return;
+      connected = false;
+      // 如果用户主动断开（disconnectBtn 点过 → setConnState('disconnected') 已经在 doDisconnect 里写了），不要回写 error
+      // 这里只处理「非主动断开」且 UI 仍处于 connected/connecting 的情况
+      const pill = document.getElementById('connPill');
+      const textNow = pill ? pill.textContent : '';
+      if (textNow === '已连接' || textNow === '连接中...') {
+        setConnState('disconnected');
+      }
+      stopHeartbeat();
+    });
+  }
+
+  function doDisconnect() {
+    // 0) 立刻设「用户主动断开」标志：后面的 error/close/connect 回调全部不改状态（防 destroy 把状态写回 error 把断开按钮锁死）
+    userInitiatedDisconnect = true;
+    // 1) 清连接超时
+    clearConnectTimer();
+    // 2) 代次 +1，任何本代 socket 的延迟回调都会被忽略（防连接中途点断开，随后 connect 成功又回来标 connected）
+    socketEpoch++;
+    // 3) 先写 UI 状态（先把按钮和IP解锁，用户立即可以换IP）；写状态必须在 destroy socket **之前**，
+    //    否则 socket error/close 回调可能覆盖或被忽略顺序
+    recvBuf = Buffer.alloc(0);
+    connected = false;
+    setConnState('disconnected');
+    // 4) 心跳
+    stopHeartbeat();
+    // 5) 销毁 socket（先 removeAllListeners 再 destroy，destroy 可能会触发 error + close，但回调里会 ignore）
+    if (socket) {
+      try {
+        socket.removeAllListeners('data');
+        socket.removeAllListeners('error');
+        socket.removeAllListeners('close');
+        socket.removeAllListeners('connect');
+        socket.removeAllListeners('timeout');
+      } catch(e) {}
+      try { socket.destroy(); } catch(e) {}
+      // 兜底：200ms 后强制 socket=null，防止任何异常导致 destroy 回调异常后 socket 引用残留
+      setTimeout(() => { if (socket && !socket.destroyed) { try { socket.destroy(); } catch(_) {} socket = null; } }, 200);
+      socket = null;
+    }
+    // 6) 同步清空：快捷键记录（保留配置，但主控取消注册），避免下次打开重新注册冲突（主进程关窗口也会清，但手动断开就这里先清）
+    try {
+      ipcRenderer.send('console-shortcut-register', []); // 传入空数组：主进程 unregister 所有控台快捷键
+    } catch(_) {}
+  }
+
+  // ========== 心跳 ==========
+  function startHeartbeat() {
+    stopHeartbeat();
+    heartbeatTimer = setInterval(() => { sendMessage(MSG_HEARTBEAT, {}); }, 25000);
+  }
+  function stopHeartbeat() {
+    if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+  }
+
+  // 用户主动断开标志：doDisconnect() 调过以后，所有底层 error/close/connect 回调都不允许再改写 UI 状态，
+  // 防止 destroy 触发 error 回调把 UI 从「已断开」写回「连接错误」，导致断开按钮被锁死（用户点了断开又断不开、换不了IP）。
+  let userInitiatedDisconnect = false;
+
+  // ========== UI 状态 ==========
+  function setConnState(state) {
+    // 如果是用户主动断开后的稳定期：任何回调想把 disconnected / connecting / error 改成别的，都拒绝
+    if (userInitiatedDisconnect && state !== 'disconnected') {
+      // 仍然允许写 "disconnected"，但其它状态（connected / connecting / error）一律忽略，避免回调把断开后状态搞乱
+      return;
+    }
+    const dot = document.getElementById('connDot');
+    const pill = document.getElementById('connPill');
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const ipInput = document.getElementById('ipInput');
+    dot.className = 'status-dot';
+    if (state === 'connected') {
+      dot.classList.add('on');
+      pill.className = 'pill green';
+      pill.textContent = I18N.t('已连接');
+      connectBtn.disabled = true;
+      disconnectBtn.disabled = false;
+      // 连接成功 → IP 锁定，避免误改 IP 后断开失败
+      if (ipInput) ipInput.disabled = true;
+    } else if (state === 'connecting') {
+      pill.className = 'pill gray';
+      pill.textContent = I18N.t('连接中') + '...';
+      connectBtn.disabled = true;
+      disconnectBtn.disabled = false; // 连接中也允许取消连接
+      // 连接中也允许改 IP（配合取消连接，不用先退回 disconnected）
+      if (ipInput) ipInput.disabled = false;
+    } else if (state === 'error') {
+      dot.classList.add('err');
+      pill.className = 'pill red';
+      pill.textContent = I18N.t('连接错误');
+      connectBtn.disabled = false; // 错误状态允许立即重连
+      disconnectBtn.disabled = false; // 错误也允许「强制断开复位」（清空状态、回到未连接）
+      if (ipInput) ipInput.disabled = false;
+    } else {
+      pill.className = 'pill gray';
+      pill.textContent = I18N.t('未连接');
+      connectBtn.disabled = false;
+      disconnectBtn.disabled = true;
+      if (ipInput) ipInput.disabled = false;
+    }
+    // 同步连接状态到主窗口
+    try { ipcRenderer.send('console-status-sync', state); } catch(_) {}
+    try { scheduleSnapshot(); } catch(_) {}
+  }
+
+  // ========== 播放列表渲染（分类可折叠 + 拖拽排序）==========
+  const groupTypeNames = {0:'节目', 1:'场景', 2:'音视频', 3:'DMX', 4:'开关', 5:'推杆', 6:'音乐', 7:'视频', 8:'图片'};
+  const stateNames = {0:'停止', 1:'播放中', 2:'暂停'};
+  // 分类折叠状态
+  const collapsedGroups = new Set();
+  // 分类排序（保存顺序：listId数组）
+  function applyGroupOrder() {
+    try {
+      const saved = localStorage.getItem('consoleGroupOrder');
+      if (!saved) return;
+      const orderArr = JSON.parse(saved);
+      if (!Array.isArray(orderArr)) return;
+      // 按顺序重建 playlists
+      const ordered = [];
+      const remain = [];
+      for (const id of orderArr) {
+        const idx = playlists.findIndex(p => p.listId === id);
+        if (idx !== -1) ordered.push(playlists[idx]);
+      }
+      for (let i = 0; i < playlists.length; i++) {
+        if (!ordered.includes(playlists[i])) remain.push(playlists[i]);
+      }
+      playlists = ordered.concat(remain);
+    } catch(_) {}
+  }
+  function saveGroupOrder() {
+    try {
+      const orderArr = playlists.map(p => p.listId);
+      localStorage.setItem('consoleGroupOrder', JSON.stringify(orderArr));
+    } catch(_) {}
+  }
+  // 加载折叠状态
+  try {
+    const savedCollapsed = localStorage.getItem('consoleGroupCollapsed');
+    if (savedCollapsed) {
+      const arr = JSON.parse(savedCollapsed);
+      if (Array.isArray(arr)) arr.forEach(id => collapsedGroups.add(id));
+    }
+  } catch(_) {}
+  function saveCollapsedState() {
+    try {
+      localStorage.setItem('consoleGroupCollapsed', JSON.stringify(Array.from(collapsedGroups)));
+    } catch(_) {}
+  }
+
+  function renderPlaylists() {
+    applyGroupOrder();
+    const box = document.getElementById('playlistsBox');
+    box.innerHTML = '';
+    if (playlists.length === 0) {
+      box.innerHTML = '<div style="color:var(--textSecondary); font-size:12px; padding:20px; text-align:center;">' + I18N.t('暂无播放列表') + '</div>';
+      renderPlayingSection();
+      return;
+    }
+
+    let dragSrcListId = null;
+    const groups = [];
+
+    playlists.forEach((pl, plIdx) => {
+      const items = pl.playItemList || [];
+      const count = items.length;
+      const isCollapsed = collapsedGroups.has(pl.listId);
+
+      // 分类边框容器
+      const group = document.createElement('div');
+      group.className = 'cat-group' + (isCollapsed ? ' collapsed' : '');
+      group.dataset.listId = pl.listId;
+      // 分类容器本身不可拖动（防止推杆、方块拖动时误触发分类重新排序）
+      group.draggable = false;
+
+      // ========= 拖放目标事件仍在 group（便于分类插入位置判断） =========
+      group.addEventListener('dragover', (e) => {
+        if (!dragSrcListId) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const rect = group.getBoundingClientRect();
+        const isTop = (e.clientY - rect.top) < rect.height / 2;
+        groups.forEach(g => g.classList.remove('drag-over', 'drag-over-top', 'drag-over-bottom'));
+        group.classList.add('drag-over');
+        if (isTop) group.classList.add('drag-over-top');
+        else group.classList.add('drag-over-bottom');
+      });
+      group.addEventListener('dragleave', () => {
+        group.classList.remove('drag-over', 'drag-over-top', 'drag-over-bottom');
+      });
+      group.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const rect = group.getBoundingClientRect();
+        const isTop = (e.clientY - rect.top) < rect.height / 2;
+        groups.forEach(g => g.classList.remove('drag-over', 'drag-over-top', 'drag-over-bottom'));
+        if (!dragSrcListId || dragSrcListId === pl.listId) return;
+        const srcIdx = playlists.findIndex(p => p.listId === dragSrcListId);
+        const dstIdx = playlists.findIndex(p => p.listId === pl.listId);
+        if (srcIdx === -1 || dstIdx === -1) return;
+        const [moved] = playlists.splice(srcIdx, 1);
+        // 判断插入位置：目标之上或之下
+        let insertIdx = playlists.findIndex(p => p.listId === pl.listId);
+        if (!isTop) insertIdx += 1;
+        playlists.splice(insertIdx, 0, moved);
+        saveGroupOrder();
+        renderPlaylists();
+      });
+
+      // 分类标题（只有标题头可以拖动分类排序）
+      const head = document.createElement('div');
+      head.className = 'cat-head';
+      // 分类头单独 draggable，其他地方都不可
+      head.draggable = true;
+      head.innerHTML = `
+        <span class="drag-handle" title="${I18N.t('按住此处拖动排序')}">⋮⋮</span>
+        <span class="arrow"></span>
+        <span class="cname">${pl.listName || I18N.t('未命名列表')}</span>
+        <span class="ctype">${groupTypeNames[pl.playType] !== undefined ? groupTypeNames[pl.playType] : (I18N.t('类型') + pl.playType)}</span>
+        <span class="ccount ${count === 0 ? 'zero' : ''}">${count}</span>
+      `;
+
+      // 只有分类头才能发起 dragstart
+      head.addEventListener('dragstart', (e) => {
+        dragSrcListId = pl.listId;
+        group.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', pl.listId); } catch(_) {}
+        // 让拖动预览显示整个 group 而不是只显示 head 文字
+        try {
+          if (e.dataTransfer.setDragImage) {
+            // 延时等浏览器构建 drag 预览
+            setTimeout(() => { e.dataTransfer.setDragImage(group, 20, 10); }, 0);
+          }
+        } catch(_) {}
+      });
+      head.addEventListener('dragend', () => {
+        group.classList.remove('dragging');
+        groups.forEach(g => {
+          g.classList.remove('drag-over', 'drag-over-top', 'drag-over-bottom');
+        });
+      });
+      // 箭头和分类名区域点击 → 折叠/展开
+      head.addEventListener('click', (e) => {
+        // 拖拽把手不触发折叠
+        if (e.target.classList.contains('drag-handle')) return;
+        if (collapsedGroups.has(pl.listId)) collapsedGroups.delete(pl.listId);
+        else collapsedGroups.add(pl.listId);
+        saveCollapsedState();
+        renderPlaylists();
+      });
+      // 标题内所有子元素的 drag 事件冒泡 stop （避免拖动文本时也触发）
+      head.addEventListener('mousedown', (e) => {
+        // 只有 drag-handle 和 没有其他表单元素的空白区允许拖动（折叠箭头处 mousedown 不影响）
+      });
+      group.appendChild(head);
+
+      // 分类内容
+      const body = document.createElement('div');
+      body.className = 'cat-body';
+      if (count === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'cat-empty';
+        empty.textContent = I18N.t('（空）');
+        body.appendChild(empty);
+      } else {
+        // 推杆类型用推杆网格，其他用普通方块网格
+        const isFader = items.some(pi => pi.playType === 5);
+        const grid = document.createElement('div');
+        grid.className = 'item-grid' + (isFader ? ' fader-grid' : '');
+
+        items.forEach((pi, piIdx) => {
+          if (pi.playType === 5) {
+            grid.appendChild(createFaderBlock(pl, pi, piIdx));
+          } else {
+            grid.appendChild(createItemBlock(pl, pi, piIdx));
+          }
+        });
+        body.appendChild(grid);
+      }
+      group.appendChild(body);
+      groups.push(group);
+      box.appendChild(group);
+    });
+    // 渲染正在播放区域
+    renderPlayingSection();
+  }
+
+  // ========== 场景互斥 + 互斥保护 ==========
+  let sceneMutexEnabled = false;     // 场景互斥开关
+  let protectedPlayIds = new Set();  // 互斥保护：不被互斥机制关闭的playId集合（按playId存，移动不失效，删除后自动清理）
+  // 持久化（需求5：无论窗口关闭还是软件关闭，都记忆场景互斥开关 + 互斥保护列表）
+  try {
+    const s = localStorage.getItem('consoleSceneMutex');
+    if (s === '1') sceneMutexEnabled = true;
+  } catch(_) {}
+  try {
+    const s = localStorage.getItem('consoleProtectedPlayIds');
+    if (s) JSON.parse(s).forEach(x => protectedPlayIds.add(String(x)));
+  } catch(_) {}
+  function saveMutexState() {
+    try { localStorage.setItem('consoleSceneMutex', sceneMutexEnabled ? '1' : '0'); } catch(_) {}
+  }
+  // 只在控台已加载过完整数据（playlists 长度>0）时才清理失效保护项；否则原样保存（防止未加载时把记忆的保护列表清空）
+  function saveProtectedPlayIds() {
+    if (consoleDataLoadedOnce && playlists && playlists.length > 0) {
+      const valid = getAllPlayIds();
+      for (const id of Array.from(protectedPlayIds)) {
+        if (!valid.has(String(id))) protectedPlayIds.delete(id);
+      }
+    }
+    try { localStorage.setItem('consoleProtectedPlayIds', JSON.stringify(Array.from(protectedPlayIds))); } catch(_) {}
+  }
+  // 在每次重渲染/清理失效快捷键时也清理保护列表（前提：控台完整列表已加载，避免过早清空）
+  const _origCleanupInvalidShortcuts = cleanupInvalidShortcuts;
+  cleanupInvalidShortcuts = function() {
+    const r1 = _origCleanupInvalidShortcuts.call(this);
+    let changed = false;
+    if (consoleDataLoadedOnce && playlists && playlists.length > 0) {
+      const before = protectedPlayIds.size;
+      const valid = getAllPlayIds();
+      for (const id of Array.from(protectedPlayIds)) {
+        if (!valid.has(String(id))) protectedPlayIds.delete(id);
+      }
+      if (protectedPlayIds.size !== before) changed = true;
+    }
+    if (changed) saveProtectedPlayIds();
+    return r1 || changed;
+  };
+
+  // 切换场景互斥开关
+  function toggleSceneMutex() {
+    sceneMutexEnabled = !sceneMutexEnabled;
+    saveMutexState();
+    renderPlayingSection();
+    // 推送状态到主进程缓存，确保手机端轮询能立即看到按钮状态变化
+    scheduleSnapshot();
+  }
+  // 执行场景互斥：当某内容被播放时，150ms 后关闭其他未受保护的播放项
+  function applySceneMutexAfter(justPlayedPlayId) {
+    if (!sceneMutexEnabled) return;
+    // 延迟 0.15s 关闭其他
+    setTimeout(() => {
+      const playing = getPlayingItems();
+      let changed = false;
+      playing.forEach(({ pl, pi }) => {
+        if (String(pi.playId) === String(justPlayedPlayId)) return;   // 刚播放的这个不关
+        if (protectedPlayIds.has(String(pi.playId))) return;         // 受保护的不关
+        // 关闭：发送停止
+        selectedPlayItem = {
+          playListId: pl.listId, playListName: pl.listName,
+          playType: pi.playType, playId: pi.playId, playName: pi.playName
+        };
+        sendPlayControl(4);
+        pi.playState = 0;
+        // Fix2b: 场景被互斥关闭时，通知主界面停止绑定的歌曲
+        if (!syncPlayFromMainInProgress) notifyMainMusicByPlayId(pi.playId, 4);
+        changed = true;
+      });
+      if (changed) {
+        renderPlaylists();
+        triggerRefreshFlash();
+      }
+    }, 150);
+  }
+
+  // ========== 互斥保护多选弹窗 ==========
+  let pmModalEl = null;
+  function openProtectModal() {
+    saveProtectedPlayIds(); // 先清理失效
+    const mask = document.createElement('div');
+    mask.className = 'pm-mask';
+    pmModalEl = mask;
+
+    // 临时拷贝
+    const tempSet = new Set(protectedPlayIds);
+
+    let html = '';
+    playlists.forEach(pl => {
+      if (!pl.playItemList || pl.playItemList.length === 0) return;
+      html += `<div class="pm-group" data-list-id="${pl.listId}">
+        <div class="pm-gh">
+          <span>${pl.listName || I18N.t('未命名')}</span>
+          <span class="gt">${groupTypeNames[pl.playType] !== undefined ? groupTypeNames[pl.playType] : ''}</span>
+          <span class="gc">${pl.playItemList.length}${I18N.t('项')}</span>
+        </div>
+        <div class="pm-items">`;
+      pl.playItemList.forEach((pi, idx) => {
+        const id = String(pi.playId);
+        const checked = tempSet.has(id) ? 'checked' : '';
+        html += `<label class="pm-item" data-pid="${id}">
+          <input type="checkbox" ${checked}>
+          <span class="pi-no">${idx+1}</span>
+          <span class="pi-nm" title="${pi.playName || ''}">${pi.playName || I18N.t('未命名')}</span>
+          <span class="pi-cat">${groupTypeNames[pi.playType] !== undefined ? groupTypeNames[pi.playType] : ''}</span>
+        </label>`;
+      });
+      html += `</div></div>`;
+    });
+    if (!html) {
+      html = `<div style="color:var(--textSecondary); text-align:center; padding:30px;">${I18N.t('还没有任何内容，请先连接控台并加载')}</div>`;
+    }
+
+    mask.innerHTML = `<div class="pm-modal" onclick="event.stopPropagation()">
+      <div class="pm-mh">
+        <div style="display:flex;align-items:center;flex-wrap:wrap;">
+          <span class="title">${I18N.t('互斥保护设置')}</span>
+          <span class="tips">${I18N.t('被选中的内容在场景互斥开启时不会被自动关闭。控台删除了的内容会自动移除保护。')}</span>
+        </div>
+        <button class="close" onclick="closeProtectModal()">✕</button>
+      </div>
+      <div class="pm-toolbar">
+        <input class="search" id="pmSearch" placeholder="${I18N.t('搜索名称 / 序号…')}" />
+        <button class="sel-btn" id="pmSelAll">${I18N.t('全选')}</button>
+        <button class="sel-btn" id="pmSelNone">${I18N.t('全不选')}</button>
+        <button class="sel-btn protect-all" id="pmProtectPlaying">${I18N.t('保护所有正在播放')}</button>
+      </div>
+      <div class="pm-mb" id="pmMb">${html}</div>
+      <div class="pm-mf">
+        <button class="btn btn-default" onclick="closeProtectModal()">${I18N.t('取消')}</button>
+        <button class="btn btn-primary" id="pmSave">${I18N.t('确定')}</button>
+      </div>
+    </div>`;
+    mask.onclick = () => closeProtectModal();
+    document.body.appendChild(mask);
+
+    // 搜索
+    const search = document.getElementById('pmSearch');
+    search.addEventListener('input', () => {
+      const kw = search.value.trim().toLowerCase();
+      document.querySelectorAll('.pm-group').forEach(grp => {
+        let anyShow = false;
+        grp.querySelectorAll('.pm-item').forEach(it => {
+          const no = it.querySelector('.pi-no').textContent.toLowerCase();
+          const nm = (it.querySelector('.pi-nm').textContent || '').toLowerCase();
+          const show = !kw || no.includes(kw) || nm.includes(kw);
+          it.style.display = show ? '' : 'none';
+          if (show) anyShow = true;
+        });
+        grp.style.display = anyShow ? '' : 'none';
+      });
+    });
+    // 全选 / 全不选
+    document.getElementById('pmSelAll').onclick = () => {
+      document.querySelectorAll('.pm-item input[type="checkbox"]').forEach(cb => {
+        if (cb.closest('.pm-item').style.display !== 'none') cb.checked = true;
+      });
+    };
+    document.getElementById('pmSelNone').onclick = () => {
+      document.querySelectorAll('.pm-item input[type="checkbox"]').forEach(cb => cb.checked = false);
+    };
+    document.getElementById('pmProtectPlaying').onclick = () => {
+      const playingIds = new Set(getPlayingItems().map(x => String(x.pi.playId)));
+      document.querySelectorAll('.pm-item').forEach(it => {
+        if (playingIds.has(it.dataset.pid)) it.querySelector('input').checked = true;
+      });
+    };
+    // 保存
+    document.getElementById('pmSave').onclick = () => {
+      protectedPlayIds.clear();
+      document.querySelectorAll('.pm-item').forEach(it => {
+        const cb = it.querySelector('input');
+        if (cb.checked) protectedPlayIds.add(String(it.dataset.pid));
+      });
+      saveProtectedPlayIds();
+      closeProtectModal();
+      renderPlaylists();
+    };
+  }
+  function closeProtectModal() {
+    if (pmModalEl) { pmModalEl.remove(); pmModalEl = null; }
+  }
+
+  // ========== 正在播放区域（置尾）==========
+  // 收集所有正在播放/暂停的项目，排除推杆类型并按 playId 去重（需求3：避免推杆/重复项出现在播放列表）
+  function getPlayingItems() {
+    const result = [];
+    const seenPids = new Set();
+    playlists.forEach(pl => {
+      if (pl.playItemList) {
+        pl.playItemList.forEach(pi => {
+          // playType=5 代表推杆（Fader），一律不纳入正在播放管理
+          if (pi.playType === 5) return;
+          const pidStr = String(pi.playId);
+          if (seenPids.has(pidStr)) return; // 同一 playId 只显示一次，防止「两个一模一样的按钮」
+          if (pi.playState === 1 || pi.playState === 2) {
+            seenPids.add(pidStr);
+            result.push({ pl, pi });
+          }
+        });
+      }
+    });
+    return result;
+  }
+
+  function renderPlayingSection() {
+    const box = document.getElementById('playingSection');
+    box.innerHTML = '';
+    const playing = getPlayingItems();
+    const count = playing.length;
+
+    const section = document.createElement('div');
+    section.className = 'playing-section';
+
+    const head = document.createElement('div');
+    head.className = 'playing-head';
+    head.innerHTML = `
+      <span class="ph-title">${I18N.t('正在播放')}</span>
+      <span class="ph-count ${count === 0 ? 'zero' : ''}">${count}</span>
+      <span class="spacer"></span>
+      <div class="ph-actions">
+        <button class="ph-btn" title="${I18N.t('设置在场景互斥中不被自动关闭的内容（多选）')}" onclick="openProtectModal()">
+          🛡 ${I18N.t('互斥保护')} ${protectedPlayIds.size > 0 ? '·' + protectedPlayIds.size : ''}
+        </button>
+        <button class="ph-btn btn-mutex ${sceneMutexEnabled ? 'on' : ''}" title="${I18N.t('开启后播放任何内容会在0.15秒后自动关闭其他未受保护的播放项')}" onclick="toggleSceneMutex()">
+          ${sceneMutexEnabled ? '✓ ' + I18N.t('场景互斥') : I18N.t('场景互斥')}
+        </button>
+        <button class="ph-btn btn-stopall" ${count === 0 ? 'disabled' : ''} onclick="stopAllPlaying()">${I18N.t('一键关闭')}</button>
+      </div>
+    `;
+    section.appendChild(head);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'playing-body-wrap';
+    if (count === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'playing-empty';
+      empty.textContent = I18N.t('暂无正在播放的内容');
+      wrap.appendChild(empty);
+    } else {
+      const grid = document.createElement('div');
+      grid.className = 'playing-grid';
+      playing.forEach(({ pl, pi }) => {
+        const btn = document.createElement('button');
+        const isPaused = pi.playState === 2;
+        const isProtected = protectedPlayIds.has(String(pi.playId));
+        btn.className = 'playing-btn' + (isPaused ? ' paused' : '') + (isProtected ? ' protected' : '');
+        btn.type = 'button';
+        const catName = groupTypeNames[pi.playType] !== undefined ? groupTypeNames[pi.playType] : '';
+        const stateText = isPaused ? I18N.t('暂停') : I18N.t('播放中');
+        btn.innerHTML = `
+          <span class="pb-cat">${catName}</span>
+          <span class="pb-name" title="${pi.playName || I18N.t('未命名')} · ${stateText}">${pi.playName || I18N.t('未命名')}</span>
+          <span class="pb-close" title="${I18N.t('关闭此内容')}">✕</span>
+        `;
+        // 关闭按钮单独事件
+        const closeBtn = btn.querySelector('.pb-close');
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectedPlayItem = {
+            playListId: pl.listId, playListName: pl.listName,
+            playType: pi.playType, playId: pi.playId, playName: pi.playName
+          };
+          sendPlayControl(4);
+          pi.playState = 0;
+          // Fix2b: 播放区关闭时通知主界面停止绑定的歌曲
+          if (!syncPlayFromMainInProgress) notifyMainMusicByPlayId(pi.playId, 4);
+          renderPlaylists();
+          triggerRefreshFlash();
+        });
+        // 整按钮点击 → 切换播放/停止（主要为停止）
+        btn.addEventListener('click', () => {
+          selectedPlayItem = {
+            playListId: pl.listId, playListName: pl.listName,
+            playType: pi.playType, playId: pi.playId, playName: pi.playName
+          };
+          sendPlayControl(4);
+          pi.playState = 0;
+          // Fix2b: 播放区按钮关闭时通知主界面停止绑定的歌曲
+          if (!syncPlayFromMainInProgress) notifyMainMusicByPlayId(pi.playId, 4);
+          renderPlaylists();
+          triggerRefreshFlash();
+        });
+        grid.appendChild(btn);
+      });
+      wrap.appendChild(grid);
+    }
+    section.appendChild(wrap);
+    box.appendChild(section);
+  }
+
+  // 一键关闭所有正在播放的内容
+  function stopAllPlaying() {
+    const playing = getPlayingItems();
+    if (playing.length === 0) return;
+    playing.forEach(({ pl, pi }) => {
+      selectedPlayItem = {
+        playListId: pl.listId, playListName: pl.listName,
+        playType: pi.playType, playId: pi.playId, playName: pi.playName
+      };
+      sendPlayControl(4); // 停止
+      pi.playState = 0;   // 立即更新本地状态为停止
+      // Fix2b: 一键关闭时，通知主界面停止绑定的歌曲
+      if (!syncPlayFromMainInProgress) notifyMainMusicByPlayId(pi.playId, 4);
+    });
+    renderPlaylists();
+    triggerRefreshFlash();
+    // 立即推送快照给主进程（不等150ms延迟，确保手机端能立即收到空 playingItems）
+    try { snapshotNow(); } catch(_) {}
+  }
+
+  // 创建普通节目项方块
+  function createItemBlock(pl, pi, piIdx) {
+    const stateNum = pi.playState || 0;
+    const block = document.createElement('div');
+    block.className = 'item-block s' + stateNum;
+    if (selectedPlayItem && selectedPlayItem.playId === pi.playId) block.classList.add('active');
+
+    // 应用快捷键自定义颜色（用户设置的颜色：默认应用于停止态；播放态保持绿色）
+    const cfg = consoleShortcuts.get(String(pi.playId));
+    if (cfg && cfg.color) {
+      if (stateNum === 0) { // 停止态：使用自定义色
+        const txtColor = pickTextColor(cfg.color);
+        block.style.background = cfg.color;
+        block.style.borderColor = cfg.color;
+        block.style.color = txtColor;
+        block.classList.add('custom-color');
+      }
+    }
+
+    // 只显示名称，不显示状态文字（通过颜色判断状态）
+    block.innerHTML = `
+      <div class="ib-name">${piIdx + 1}. ${pi.playName || I18N.t('未命名')}</div>
+    `;
+    block.onclick = () => {
+      selectedPlayItem = {
+        playListId: pl.listId, playListName: pl.listName,
+        playType: pi.playType, playId: pi.playId, playName: pi.playName
+      };
+      // 点击切换播放/停止：播放中或暂停→停止，停止→播放
+      const ctrl = (stateNum === 1 || stateNum === 2) ? 4 : 1;
+      sendPlayControl(ctrl);
+      // 乐观更新本地状态（设备推送会再次确认）
+      pi.playState = (ctrl === 1) ? 1 : 0;
+      // 需求3：通知主界面同步绑定音乐（必须非同步中才发，防循环）
+      if (!syncPlayFromMainInProgress) notifyMainMusicByPlayId(pi.playId, ctrl);
+      // 如果是从 停止→播放 状态变化，触发场景互斥（延迟0.15s关其他未保护项）
+      if (ctrl === 1) applySceneMutexAfter(pi.playId);
+      renderPlaylists();
+      triggerRefreshFlash();
+    };
+    return block;
+  }
+
+  // 创建推杆方块
+  function createFaderBlock(pl, pi, piIdx) {
+    const progress = Math.round(pi.playProgress || 0);
+    const block = document.createElement('div');
+    block.className = 'fader-block';
+    if (selectedPlayItem && selectedPlayItem.playId === pi.playId) block.classList.add('active');
+    const fid = 'fader_' + pl.listId + '_' + pi.playId;
+    // 两列布局： 左列(名称竖排，字横写)  |  右列(推满 → 推杆 → 数值 → 归零，垂直叠放)
+    // 序号单独一行（用 <br> 强制换行，与名称分开显示）
+    const nameText = pi.playName || I18N.t('未命名');
+    // 根据推杆块高度(210px)计算名称最大字数：210 - 8(padding) - 12(序号) ≈ 190px可用，每字约15px → 最多12字
+    const maxNameChars = 11;
+    const truncName = nameText.length > maxNameChars ? nameText.substring(0, maxNameChars) + '…' : nameText;
+    block.innerHTML = `
+      <div class="fb-name" title="${piIdx + 1}. ${nameText}"><span class="idx">${piIdx + 1}</span>${truncName.split('').map(c => '<span class="nc">'+c+'</span>').join('')}</div>
+      <div class="fb-col">
+        <button class="b-full" type="button" data-fader-full>${I18N.t('推满')}</button>
+        <div class="fb-slider-wrap">
+          <input type="range" class="fader-vslider" id="${fid}" min="0" max="255" value="${progress}" autocomplete="off">
+        </div>
+        <div class="fb-val" id="${fid}_val">${progress}</div>
+        <button class="b-zero" type="button" data-fader-zero>${I18N.t('归零')}</button>
+      </div>
+    `;
+    // 推杆输入/变更
+    const slider = block.querySelector('#' + fid);
+    const valBox = block.querySelector('.fb-val');
+    slider.addEventListener('input', () => {
+      const v = parseInt(slider.value);
+      valBox.textContent = v;
+      onFaderInput(pl.listId, pi.playId, v, /*isUserDrag*/ true);
+    });
+    slider.addEventListener('change', () => {
+      onFaderChange(pl.listId, pi.playId, parseInt(slider.value));
+    });
+    // 推满 / 归零按钮（不触发分类拖拽）
+    const btnFull = block.querySelector('[data-fader-full]');
+    const btnZero = block.querySelector('[data-fader-zero]');
+    btnFull.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setFaderDirect(pl, pi, 255, slider, valBox);
+    });
+    btnZero.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // 点击"归零"：不管当前是不是 0，都以"真正归零"为优先级，
+      // 但若当前就是 0 就别再发一次（控台协议收到重复 0 可能被误当"播放推杆"的指令）
+      const cur = parseInt(slider.value);
+      if (cur === 0 && Math.round(pi.playProgress || 0) === 0) return;
+      setFaderDirect(pl, pi, 0, slider, valBox);
+    });
+    // 左键点击推杆空白位置（不涉及滑块/按钮）— 只高亮选择不触发播放状态
+    block.addEventListener('click', (ev) => {
+      if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'BUTTON') return;
+      selectedPlayItem = {
+        playListId: pl.listId, playListName: pl.listName,
+        playType: pi.playType, playId: pi.playId, playName: pi.playName
+      };
+      renderPlaylists();
+    });
+    return block;
+  }
+
+  // ========== 推杆控制（playType=5，playProgress 0-255）==========
+  function findPlayItem(listId, playId) {
+    for (const pl of playlists) {
+      if (!pl || !pl.playItemList) continue;
+      // Fix3a: listId 为 null/undefined 时搜索所有播放列表（双向同步 sync-play-from-main 传 null 时需要跨列表查找）
+      if (listId != null && pl.listId !== listId) continue;
+      for (const pi of pl.playItemList) {
+        if (pi.playId === playId) return { pl, pi };
+      }
+    }
+    return null;
+  }
+
+  // 防止控台回消息把正在拖动/刚刚设置的推杆覆盖（设置后 600ms 内忽略回来的同步值）
+  const faderLockUntil = new Map(); // playId -> Date.now() + lockMs
+  const FADER_LOCK_MS = 650;
+
+  let faderSendTimer = null;
+  function onFaderInput(listId, playId, val, isUserDrag) {
+    const v = parseInt(val);
+    // DOM显示
+    const fid = 'fader_' + listId + '_' + playId;
+    const valEl = document.getElementById(fid + '_val');
+    if (valEl) valEl.textContent = v;
+    // 数据模型
+    const found = findPlayItem(listId, playId);
+    if (found) found.pi.playProgress = v;
+    // 用户操作上锁，忽略控台短暂回值（防跳回）
+    if (isUserDrag) faderLockUntil.set(String(playId), Date.now() + FADER_LOCK_MS);
+    // 节流发送
+    if (faderSendTimer) clearTimeout(faderSendTimer);
+    faderSendTimer = setTimeout(() => sendFaderProgress(listId, playId, v), 180);
+  }
+  function onFaderChange(listId, playId, val) {
+    if (faderSendTimer) { clearTimeout(faderSendTimer); faderSendTimer = null; }
+    sendFaderProgress(listId, playId, parseInt(val));
+  }
+  // 「推满/归零」按钮直接设置：DOM + 模型 + 上锁 + 发送
+  function setFaderDirect(pl, pi, val, sliderEl, valEl) {
+    const v = parseInt(val);
+    sliderEl.value = v;
+    if (valEl) valEl.textContent = v;
+    pi.playProgress = v;
+    faderLockUntil.set(String(pi.playId), Date.now() + FADER_LOCK_MS);
+    if (faderSendTimer) clearTimeout(faderSendTimer);
+    sendFaderProgress(pl.listId, pi.playId, v);
+  }
+  // 保留旧接口兼容
+  function setFader(listId, playId, val) {
+    const fid = 'fader_' + listId + '_' + playId;
+    const el = document.getElementById(fid);
+    const valEl = document.getElementById(fid + '_val');
+    const found = findPlayItem(listId, playId);
+    if (!el || !found) return;
+    el.value = val;
+    if (valEl) valEl.textContent = val;
+    found.pi.playProgress = val;
+    faderLockUntil.set(String(playId), Date.now() + FADER_LOCK_MS);
+    if (faderSendTimer) clearTimeout(faderSendTimer);
+    sendFaderProgress(listId, playId, val);
+  }
+  function sendFaderProgress(listId, playId, progress) {
+    const found = findPlayItem(listId, playId);
+    if (!found) return;
+    // 推杆设置不再设置 selectedPlayItem（避免场景互斥错误应用到推杆，也避免推满后被当成播放项目列入正在播放）
+    sendMessage(MSG_PLAY_CTRL, {
+      playListId: found.pl.listId,
+      playListName: found.pl.listName,
+      playType: found.pi.playType,
+      playId: found.pi.playId,
+      playName: found.pi.playName,
+      playProgress: progress,
+      changeType: 1
+    });
+  }
+
+  // ========== 播控操作 ==========
+  function sendPlayControl(controlType) {
+    if (!selectedPlayItem) {
+      sendMessage(MSG_PLAY_CTRL, { controlType: controlType });
+      return;
+    }
+    sendMessage(MSG_PLAY_CTRL, {
+      playListId: selectedPlayItem.playListId,
+      playListName: selectedPlayItem.playListName,
+      playType: selectedPlayItem.playType,
+      playId: selectedPlayItem.playId,
+      playName: selectedPlayItem.playName,
+      controlType: controlType
+    });
+  }
+
+  function doQueryPlaylists() {
+    if (!connected) return;
+    // 点刷新时先清空 recvBuf：防止解析错位卡死积累的坏字节一直循环
+    recvBuf = Buffer.alloc(0);
+    sendMessage(MSG_QUERY_LIST, {});
+    // 路由器偶丢 1003 查询响应：500ms 没返回就自动重发一次（收到后在 handleMessage 里 cancel）
+    scheduleQueryRetry();
+  }
+  // 顶部「强制重登+查询」诊断按钮（过路由器一直空白时点这个最快）
+  function doForceReloginAndQuery(){
+    if(!connected){ showProtoNotice('请先连接控台', 'warn', 5); return; }
+    recvBuf = Buffer.alloc(0);
+    sendMessage(MSG_LOGIN, { ukeyId:'', password:'', deviceId: 'MJ004' + Date.now().toString(16).toUpperCase() });
+    setTimeout(()=>{ if(connected){ sendMessage(MSG_QUERY_LIST, {}); scheduleQueryRetry(); } }, 450);
+  }
+
+  // ====== 顶栏 5 个按钮函数显式暴露到 window（双保险：任何 inline onclick 都能找到，即使函数声明被放到 IIFE 里也不会丢） ======
+  try {
+    window.doConnect = doConnect;
+    window.doDisconnect = doDisconnect;
+    window.doQueryPlaylists = doQueryPlaylists;
+    window.doForceReloginAndQuery = doForceReloginAndQuery;
+    window.openShortcutModal = openShortcutModal;
+    window.saveShortcutModal = saveShortcutModal;
+    window.closeShortcutModal = closeShortcutModal;
+  } catch(_) {}
+
+  // ========== 自动刷新（数据过来时极淡闪烁）==========
+  let refreshFlashTimer = null;
+  function triggerRefreshFlash() {
+    const scroll = document.getElementById('mainScroll');
+    scroll.classList.add('refreshing');
+    if (refreshFlashTimer) clearTimeout(refreshFlashTimer);
+    refreshFlashTimer = setTimeout(() => { scroll.classList.remove('refreshing'); }, 600);
+    try { scheduleSnapshot(); } catch(_) {}
+  }
+
+  // 更新播放状态（设备推送的1004消息）
+  // 去重：同一个 playId+action 在 2.5s 内不重复通知（防止 用户点击→1004回执→重复触发音乐）
+  let _lastNotifyMusic = { pid: null, action: null, ts: 0 };
+  function updatePlayState(body) {
+    let changed = false;
+    let _notifyAction = null; // 1=播放 4=停止 null=不通知
+    playlists.forEach(pl => {
+      if (pl.playItemList) {
+        pl.playItemList.forEach(pi => {
+          if (pi.playId === body.playId) {
+            const isFader = pi.playType === 5;
+            if (isFader) {
+              // === 推杆（需求3）：绝不改变 playState，避免被误标记为「正在播放」从而出现在正在播放区 ===
+              // 若内存里旧状态已经是 1/2，强制纠正为 0（防止上次连接残留）
+              if (pi.playState && pi.playState !== 0) { pi.playState = 0; changed = true; }
+            } else if (body.controlType !== undefined) {
+              // 非推杆正常按协议
+              // ★ 防覆盖：主界面刚触发同步操作（syncPlayFromMainInProgress）期间，
+              //   不让控台设备推送的 play/pause 状态覆盖主界面设置的 playState
+              //   （防止停止后被控台推送的 play 状态覆盖导致"正在播放"残留）
+              //   但仍接受 stop 状态（controlType=4），确保停止能正确生效
+              if (!syncPlayFromMainInProgress) {
+                if (body.controlType === 1 || body.controlType === 3) { pi.playState = 1; _notifyAction = 1; }
+                else if (body.controlType === 2) { pi.playState = 2; _notifyAction = 2; }
+                else if (body.controlType === 4) { pi.playState = 0; _notifyAction = 4; }
+              } else {
+                // 同步期间仍接受 stop 状态，忽略 play/pause 防覆盖
+                if (body.controlType === 4) { pi.playState = 0; _notifyAction = 4; }
+              }
+              changed = true;
+            }
+            if (body.playProgress !== undefined) {
+              // 推杆进度防回弹：用户刚设置完 650ms 内收到控台回值时忽略（除非值相同）
+              const pidStr = String(pi.playId);
+              if (isFader && faderLockUntil.has(pidStr)) {
+                if (Date.now() < faderLockUntil.get(pidStr)) {
+                  if (pi.playProgress !== body.playProgress) {
+                    // 锁内不接受控台回值（防滑块跳回），保持用户设置，但仍触发重渲染显示正确值
+                    changed = true;
+                    return;
+                  }
+                } else {
+                  faderLockUntil.delete(pidStr);
+                }
+              }
+              pi.playProgress = body.playProgress;
+              changed = true;
+            }
+          }
+        });
+      }
+    });
+    if (changed) {
+      renderPlaylists();
+      triggerRefreshFlash();
+    }
+    // ★ 控台主动推送的播放/停止 → 通知主窗口联动绑定音乐（修复：控台触发场景后绑定的音乐不播放）
+    if (_notifyAction !== null && !syncPlayFromMainInProgress) {
+      notifyMainMusicByPlayId(body.playId, _notifyAction);
+    }
+  }
+
+  // ========== 控台内容快捷键配置 ==========
+  // Map: playId -> { shortcut: "Ctrl+A", color: "#ff0000", action: "toggle" }
+  let consoleShortcuts = new Map();
+  try {
+    const saved = localStorage.getItem('consoleShortcuts');
+    if (saved) {
+      const obj = JSON.parse(saved);
+      for (const k in obj) consoleShortcuts.set(k, obj[k]);
+    }
+  } catch(_) {}
+  function saveConsoleShortcuts() {
+    try {
+      const obj = {};
+      for (const [k, v] of consoleShortcuts.entries()) obj[k] = v;
+      localStorage.setItem('consoleShortcuts', JSON.stringify(obj));
+    } catch(_) {}
+  }
+
+  // 颜色对比度计算：判断是否用白色或黑色字体
+  function pickTextColor(bgHex) {
+    const hex = (bgHex || '#ffffff').replace('#','');
+    const r = parseInt(hex.substring(0,2),16), g = parseInt(hex.substring(2,4),16), b = parseInt(hex.substring(4,6),16);
+    // 亮度公式
+    const L = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return L > 0.55 ? '#1a1a1a' : '#ffffff';
+  }
+
+  // 收集所有playId（用于清理无效的快捷键配置）
+  function getAllPlayIds() {
+    const s = new Set();
+    playlists.forEach(pl => { if (pl.playItemList) pl.playItemList.forEach(pi => s.add(String(pi.playId))); });
+    return s;
+  }
+
+  // 清理无效playId快捷键（内容被删除后调用）—— 必须是控台加载过完整列表后才允许清理，避免窗口刚打开时 playlists=空 误清空已保存配置（需求2）
+  function cleanupInvalidShortcuts() {
+    if (!consoleDataLoadedOnce) return false;
+    if (!playlists || playlists.length === 0) return false;
+    const validIds = getAllPlayIds();
+    let changed = false;
+    for (const pid of Array.from(consoleShortcuts.keys())) {
+      if (!validIds.has(String(pid))) {
+        consoleShortcuts.delete(pid);
+        changed = true;
+      }
+    }
+    if (changed) saveConsoleShortcuts();
+    return changed;
+  }
+
+  // 根据playId组合快捷键字符串（复选+字母）
+  const LETTER_KEYS = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 Space ESC'.split(' ');
+
+  function composeShortcutKey(ctrl, alt, shift, key) {
+    const parts = [];
+    if (ctrl) parts.push('Ctrl');
+    if (alt) parts.push('Alt');
+    if (shift) parts.push('Shift');
+    if (key) parts.push(key);
+    return parts.join('+');
+  }
+
+  // 快捷键冲突校验（调用主进程）—— 完全异步 Promise/invoke 版本，绝不阻塞 UI（解决录制时卡死）
+  // 返回 cb({ conflict, warning, message, source, reason, duplicatedWith })
+  //   conflict = true：真正冲突/禁止保存（比如系统占用、控台内部重复）
+  //   warning  = true：允许保存，但提示（比如与主界面同名，主界面优先）
+  function checkShortcutConflict(sc, cb) {
+    const done = (out) => { try { cb && cb(out); } catch(_) {} };
+    try {
+      if (ipcRenderer.invoke) {
+        ipcRenderer.invoke('console-shortcut-check-async', sc)
+          .then((r) => {
+            if (!r) return done({ conflict: false, warning: false, source: null, reason: null });
+            // 需求2：与主界面同名但仍然允许保存（available=true，warning=true），返回 duplicatedWith 描述详细重复位置
+            if (r.available && r.warning && r.source === 'main' && r.duplicatedWith) {
+              const dup = r.duplicatedWith || {};
+              const display = (dup.displayName || (dup.module ? dup.module + ' ' : '') + (dup.groupIndex!==undefined?('组'+(dup.groupIndex+1)+' '):'') + (dup.musicIndex!==undefined?('第'+(dup.musicIndex+1)+'首'):''));
+              return done({
+                conflict: false,
+                warning: true,
+                source: 'main',
+                reason: r.reason || 'duplicated-main',
+                duplicatedWith: dup,
+                message: `与主界面「${display}」重复（主界面优先触发）`
+              });
+            }
+            if (r.available) return done({ conflict: false, warning: false, source: null, reason: null });
+            let out = { conflict: true, warning: false, source: r.source || null, reason: r.reason || null, message: '' };
+            if (r.reason === 'invalid') out.message = '快捷键格式无效';
+            else if (r.source === 'console') out.message = '该快捷键已被控台其他注册内容占用';
+            else if (r.reason === 'system' || r.source === 'system') out.message = '该快捷键被系统或其他应用占用，无法设置';
+            else out.message = '该快捷键不可用';
+            done(out);
+          })
+          .catch(() => done({ conflict: false, warning: false, source: null, reason: null }));
+        return;
+      }
+      // 老版本 electron 降级
+      setTimeout(() => {
+        try {
+          const r = ipcRenderer.sendSync('console-shortcut-check', sc);
+          if (!r) return done({ conflict: false, warning: false, source: null, reason: null });
+          if (r.available && r.warning && r.source === 'main' && r.duplicatedWith) {
+            const dup = r.duplicatedWith || {};
+            const display = (dup.displayName || (dup.module ? dup.module + ' ' : '') + (dup.groupIndex!==undefined?('组'+(dup.groupIndex+1)+' '):'') + (dup.musicIndex!==undefined?('第'+(dup.musicIndex+1)+'首'):''));
+            return done({
+              conflict: false,
+              warning: true,
+              source: 'main',
+              reason: r.reason || 'duplicated-main',
+              duplicatedWith: dup,
+              message: `与主界面「${display}」重复（主界面优先触发）`
+            });
+          }
+          if (r.available) return done({ conflict: false, warning: false, source: null, reason: null });
+          let out = { conflict: true, warning: false, source: r.source || null, reason: r.reason || null, message: '' };
+          if (r.reason === 'invalid') out.message = '快捷键格式无效';
+          else if (r.source === 'console') out.message = '该快捷键已被控台其他注册内容占用';
+          else if (r.reason === 'system') out.message = '该快捷键被系统或其他应用占用，无法设置';
+          else out.message = '该快捷键不可用';
+          done(out);
+        } catch(_) { done({ conflict: false, warning: false, source: null, reason: null }); }
+      }, 50);
+    } catch(_) {
+      done({ conflict: false, warning: false, source: null, reason: null });
+    }
+  }
+
+  // 注册快捷键到主进程
+  // 关键点：即便控台当前还没加载 playlists（刚开窗口还没连或连了还在等数据），
+  // 也不能因为 findPlayItem 找不到就跳过 —— 否则用户保存的快捷键每次都要等列表加载完再保存一次才生效（用户体验："录制好后使用没反应"）。
+  function registerAllShortcutsToMain() {
+    // 只有真正加载过一次列表才允许清理，防止误清空 localStorage 配置
+    if (consoleDataLoadedOnce && playlists && playlists.length > 0) cleanupInvalidShortcuts();
+
+    const payload = [];
+    for (const [pid, cfg] of consoleShortcuts.entries()) {
+      if (!cfg.shortcut) continue;
+      // 优先从 playlists 匹配：拿真实 playName/listId/listName，便于触发时与真实项对应
+      const found = findPlayItem(null, pid);
+      if (found) {
+        payload.push({
+          playId: pid, playName: found.pi.playName,
+          listId: found.pl.listId, listName: found.pl.listName,
+          shortcut: cfg.shortcut, action: cfg.action || 'toggle'
+        });
+      } else {
+        // playlists 还没加载的情况下，照样注册，playName/listId/listName 就先用 pid/空值占位；
+        // 等列表加载完成后，触发时机里 registerAllShortcutsToMain 会再被调一次，这些字段就会被补全刷新注册
+        payload.push({
+          playId: pid, playName: cfg.playName || ('#' + pid),
+          listId: cfg.listId || '', listName: cfg.listName || '',
+          shortcut: cfg.shortcut, action: cfg.action || 'toggle'
+        });
+      }
+    }
+    try {
+      return ipcRenderer.sendSync('console-shortcut-register', payload);
+    } catch(_) { return { conflicts: [], failed: [] }; }
+  }
+
+  // ========== 快捷键设置弹窗 ==========
+  // 保留的快捷键：和主界面对齐，禁用这些常用键
+  const SC_RESERVED = ['Ctrl+C','Ctrl+V','Ctrl+X','Ctrl+Z','Ctrl+Y','Ctrl+A','Ctrl+S','Ctrl+N','Ctrl+O','Ctrl+W','Ctrl+F','Ctrl+D','Ctrl+T','Ctrl+Shift+T','Ctrl+Shift+N','Ctrl+Shift+W','Alt+F4','Ctrl+Esc','Ctrl+Alt+Del','Ctrl+Tab','Ctrl+Shift+Tab','F1','F5','F11','Win','Win+D','Win+E','Win+R','Win+L','Win+Tab','Ctrl+Shift+Esc'];
+  // 正在录制快捷键的捕获按钮引用（全局唯一，避免多个按钮同时处于录制态）
+  let recordingCaptureBtn = null;
+  let recordingKeydownHandler = null;
+
+  function releaseRecordingCapture() {
+    if (recordingCaptureBtn && recordingCaptureBtn.parentNode) {
+      recordingCaptureBtn.classList.remove('recording');
+      // 如果没输入成功，恢复旧值
+      if (recordingCaptureBtn.textContent === I18N.t('请按快捷键…')) {
+        const old = recordingCaptureBtn.dataset.old || I18N.t('点击设置快捷键');
+        recordingCaptureBtn.textContent = old === '' ? I18N.t('点击设置快捷键') : old;
+      }
+    }
+    if (recordingKeydownHandler) {
+      document.removeEventListener('keydown', recordingKeydownHandler);
+      recordingKeydownHandler = null;
+    }
+    recordingCaptureBtn = null;
+  }
+
+  // 把 e.key 规范化成快捷键字符串
+  function eventToShortcut(e) {
+    const parts = [];
+    if (e.ctrlKey) parts.push('Ctrl');
+    if (e.altKey) parts.push('Alt');
+    if (e.shiftKey) parts.push('Shift');
+    let k = e.key;
+    if (k === 'Control' || k === 'Meta' || k === 'Alt' || k === 'Shift') return null; // 只按了修饰键
+    if (k === ' ') k = 'Space';
+    else if (k.length === 1) k = k.toUpperCase();
+    else if (k.length > 1) {
+      // 功能键原样保留 F1 / ArrowUp / Escape 等
+      if (k === 'Escape') k = 'ESC';
+      if (k === 'ArrowUp' || k === 'ArrowDown' || k === 'ArrowLeft' || k === 'ArrowRight' ||
+          k === 'Backspace' || k === 'Enter' || k === 'Tab' || k === 'Delete' || k === 'Insert' ||
+          k === 'Home' || k === 'End' || k === 'PageUp' || k === 'PageDown' ||
+          k === 'NumLock' || k === 'ScrollLock' || k === 'CapsLock' || k.startsWith('F')) {
+        // 保留
+      } else {
+        // 其他多字符键（如果不是支持的）也保留，但需要大写第一个字符
+        k = k.length > 0 ? k.charAt(0).toUpperCase() + k.slice(1) : k;
+      }
+    }
+    parts.push(k);
+    return parts.join('+');
+  }
+
+  // 需求2：一次性重画弹窗内**所有行**的「重复」标签（保证每个重复项旁边都能看到"重复"，而不是只标被修改的那一行）
+  //          —— 纯本地计算（扫描所有 capture 按钮的值），不做系统冲突检查，速度快。
+  function refreshAllRowsDuplicateTags() {
+    if (!scModalEl) return;
+    const allBtns = scModalEl.querySelectorAll('.shortcut-capture');
+    // 1) 先统计出现次数
+    const counter = new Map();
+    allBtns.forEach(b => {
+      const v = (b.textContent || '').trim();
+      if (!v || v === '点击设置快捷键' || b.classList.contains('err')) return;
+      counter.set(v, (counter.get(v) || 0) + 1);
+    });
+    // 2) 逐行：清掉已有的 warn-tag（重复标签），然后根据 counter 决定是否画新的
+    allBtns.forEach(b => {
+      const wrap = b.closest('.shortcut-wrap');
+      if (!wrap) return;
+      wrap.querySelectorAll('.warn-tag').forEach(x => x.remove());
+      const v = (b.textContent || '').trim();
+      if (!v || v === I18N.t('点击设置快捷键') || b.classList.contains('err')) return;
+      const count = counter.get(v) || 0;
+      if (count > 1) {
+        const tag = document.createElement('span');
+        tag.className = 'warn-tag';
+        tag.textContent = I18N.t('重复') + '×' + count;
+        tag.title = I18N.t('本页内存在 ') + count + I18N.t(' 个相同快捷键，保存时均视为无效');
+        wrap.appendChild(tag);
+      }
+    });
+  }
+
+  // 刷新某一行旁边的「主界面冲突 / 系统占用」标签（异步，避免阻塞UI）；
+  // 「本页重复」标签统一交给 refreshAllRowsDuplicateTags 处理
+  function refreshRowTags(changedRow, shortcutValue) {
+    const row = changedRow.closest('.sc-row');
+    if (!row) return;
+    const wrap = row.querySelector('.shortcut-wrap');
+    if (!wrap) return;
+    // 先清这一行之前画过的「冲突」类标签（保留 warn-tag：重复是全表刷新管理的，这里不动）
+    wrap.querySelectorAll('.conflict-tag').forEach(x => x.remove());
+    if (!shortcutValue) return;
+
+    // 检查本页重复（refreshRowTags 仍会顺手标一下，避免全表刷新慢时没有即时反馈）
+    let dup = false;
+    const allBtns = scModalEl ? scModalEl.querySelectorAll('.shortcut-capture') : [];
+    allBtns.forEach(b => {
+      if (b !== changedRow) {
+        const v = (b.textContent || '').trim();
+        if (v === shortcutValue) dup = true;
+      }
+    });
+    if (dup) {
+      // 立即触发全表重画重复标签，让每一个重复的都显示
+      setTimeout(() => refreshAllRowsDuplicateTags(), 0);
+    } else {
+      // 没有重复的情况下，把重复标签也同步刷一遍（可能某个重复的被清掉后需要解除其他行的重复标记）
+      setTimeout(() => refreshAllRowsDuplicateTags(), 0);
+    }
+
+    // 系统 / 主界面占用检查（异步）
+    checkShortcutConflict(shortcutValue, (res) => {
+      const curVal = (changedRow.textContent || '').trim();
+      if (curVal !== shortcutValue) return;
+      if (!wrap.isConnected) return;
+      // 清掉旧的冲突/重复警告标签
+      wrap.querySelectorAll('.conflict-tag, .warn-tag-main').forEach(x => x.remove());
+      if (res && res.warning && res.source === 'main') {
+        // 需求2：与主界面重复但仍允许保存，画黄色「⚠️主界面重复」提示（不是红色冲突）
+        const tag = document.createElement('span');
+        tag.className = 'warn-tag warn-tag-main';
+        tag.textContent = I18N.t('⚠️主界面');
+        tag.title = res.message || I18N.t('与主界面已有快捷键相同，主界面优先触发（控台侧照常保存配置，但不会生效）');
+        wrap.appendChild(tag);
+        return;
+      }
+      if (res && res.conflict) {
+        const tag = document.createElement('span');
+        tag.className = 'conflict-tag';
+        if (res.source === 'console') {
+          tag.textContent = I18N.t('已被其他内容占用');
+          tag.title = res.message || I18N.t('该快捷键已被控台其他注册内容占用');
+        } else if (res.reason === 'system') {
+          tag.textContent = I18N.t('系统占用');
+          tag.title = res.message || I18N.t('该快捷键被系统或其他应用占用，无法设置');
+        } else {
+          tag.textContent = I18N.t('冲突');
+          tag.title = res.message || I18N.t('冲突');
+        }
+        wrap.appendChild(tag);
+      }
+    });
+  }
+
+  let scModalEl = null;
+  // ===== 需求3：绑定音乐（主界面↔控台按钮双向同步播放）全局变量 =====
+  // 映射：控台 playId → { groupIndex, musicIndex, name? }
+  let consoleMusicBinds = (() => {
+    try {
+      const s = localStorage.getItem('consoleMusicBinds');
+      const arr = s ? JSON.parse(s) : []; // 数组形式 [{ consolePlayId, groupIndex, musicIndex, name }]
+      const m = new Map();
+      arr.forEach(x => { if (x && x.consolePlayId) m.set(String(x.consolePlayId), { groupIndex: x.groupIndex, musicIndex: x.musicIndex, name: x.name || '' }); });
+      return m;
+    } catch(_) { return new Map(); }
+  })();
+  function saveConsoleMusicBinds() {
+    try {
+      const arr = [];
+      for (const [pid, cfg] of consoleMusicBinds.entries()) {
+        arr.push({ consolePlayId: pid, groupIndex: cfg.groupIndex, musicIndex: cfg.musicIndex, name: cfg.name || '' });
+      }
+      localStorage.setItem('consoleMusicBinds', JSON.stringify(arr));
+    } catch(_) {}
+  }
+  // 总开关：是否启用双向同步播放
+  let musicSyncEnabled = true;
+  try {
+    const s = localStorage.getItem('consoleMusicSyncEnabled');
+    musicSyncEnabled = (s === '0') ? false : true;
+  } catch(_) { musicSyncEnabled = true; }
+
+  function openShortcutModal() {
+    // 先清理无效配置
+    cleanupInvalidShortcuts();
+    // 清理无效音乐绑定：控台删除了的playId对应绑定也去掉
+    (() => {
+      try {
+        if (!consoleDataLoadedOnce || !playlists || playlists.length === 0) return;
+        const validIds = getAllPlayIds();
+        const allKeys = Array.from(consoleMusicBinds.keys());
+        let changed = false;
+        allKeys.forEach(k => {
+          if (!validIds.has(k)) { consoleMusicBinds.delete(k); changed = true; }
+        });
+        if (changed) saveConsoleMusicBinds();
+      } catch(_) {}
+    })();
+
+    const mask = document.createElement('div');
+    mask.className = 'sc-mask';
+    scModalEl = mask;
+
+    // 构建内容
+    let html = '';
+    playlists.forEach(pl => {
+      if (!pl.playItemList || pl.playItemList.length === 0) return;
+      const catName = (pl.listName || '未命名').replace(/"/g, '&quot;');
+      html += `<div class="sc-group" data-cat="${catName}">
+        <div class="sc-gh">
+          <span class="n">${pl.listName || '未命名'}</span>
+          <span class="c">${groupTypeNames[pl.playType] !== undefined ? groupTypeNames[pl.playType] : ''}</span>
+          <span class="c" style="margin-left:4px">${pl.playItemList.length}项</span>
+        </div>`;
+      pl.playItemList.forEach((pi, idx) => {
+        const pid = String(pi.playId);
+        const cfg = consoleShortcuts.get(pid) || { shortcut:'', color:'', action:'toggle' };
+        const sc = cfg.shortcut || '';
+        const bind = consoleMusicBinds.get(pid);
+        const bindText = bind ? `🎵 绑定：${bind.name ? bind.name : ('第'+(bind.groupIndex+1)+'组 第'+(bind.musicIndex+1)+'首')}` : '🎵 绑定音乐';
+        const bindClass = 'bind-btn' + (bind ? ' has-bind' : '');
+        const pname = (pi.playName || '未命名').replace(/"/g, '&quot;');
+        html += `<div class="sc-row" data-pid="${pid}" data-name="${pname}" data-cat="${catName}">
+          <span class="idx">${idx+1}</span>
+          <div class="pname" title="${pi.playName || ''}">${pi.playName || '未命名'}</div>
+          <div class="shortcut-wrap">
+            <button type="button" class="shortcut-capture" data-sc>${sc || '点击设置快捷键'}</button>
+          </div>
+          <div class="color-wrap">
+            <label>颜色</label>
+            <input type="color" data-color value="${cfg.color || '#ff6b6b'}">
+            <button data-clearcolor>清除</button>
+          </div>
+          <button class="${bindClass}" title="将该按钮与主界面某一首音乐绑定，播放时双向同步（受顶部开关控制）" data-bindmusic>${bindText}</button>
+          <button class="clear-btn" title="清除快捷键和颜色" data-reset>✕</button>
+        </div>`;
+      });
+      html += '</div>';
+    });
+
+    if (playlists.length === 0 || playlists.every(pl => !pl.playItemList || pl.playItemList.length === 0)) {
+      html = '<div style="color:var(--textSecondary); text-align:center; padding:30px;">还没有任何节目内容，请先连接控台并加载内容</div>';
+    }
+
+    mask.innerHTML = `<div class="sc-modal" onclick="event.stopPropagation()">
+      <div class="sc-mh">
+        <div>
+          <span class="title">控台内容快捷键设置</span>
+          <span class="tips" style="margin-left:12px;">点击「点击设置快捷键」后按下键盘组合（Ctrl/Alt/Shift+键），点击空白区域取消录制。支持 ESC 清除当前快捷键。</span>
+        </div>
+        <button class="close" onclick="closeShortcutModal()">✕</button>
+      </div>
+      <div class="sc-toolbar">
+        <label class="sync-sw">
+          <input type="checkbox" id="scSyncEnabled" ${musicSyncEnabled ? 'checked' : ''} />
+          允许播放操作双向同步（控台按钮 ↔ 主界面音乐，相互触发）
+        </label>
+        <input type="text" class="sc-search" id="scSearchInput" placeholder="🔍 搜索节目名称 / 分类..." />
+        <span class="spacer"></span>
+        <span class="tips-2">🎵 绑定音乐：把控台按钮和主界面的音乐按钮配对。上面开关打开时，任一方播放都会同步触发另一方。</span>
+      </div>
+      <div class="sc-mb" id="sc-mb">
+        ${html}
+      </div>
+      <div class="sc-mf">
+        <button class="btn btn-default" onclick="closeShortcutModal()">取消</button>
+        <button class="btn btn-primary" id="sc-save" onclick="saveShortcutModal()">保存</button>
+      </div>
+    </div>`;
+    mask.onclick = () => {
+      // 点击遮罩先取消录制（如果在录制中），而不是直接关掉
+      if (recordingCaptureBtn) { releaseRecordingCapture(); return; }
+      closeShortcutModal();
+    };
+    document.body.appendChild(mask);
+
+    // ★ 搜索功能：实时过滤节目行
+    const searchInput = mask.querySelector('#scSearchInput');
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.addEventListener('input', () => {
+        const kw = searchInput.value.trim().toLowerCase();
+        const groups = mask.querySelectorAll('.sc-group');
+        let visibleCount = 0;
+        groups.forEach(g => {
+          const rows = g.querySelectorAll('.sc-row');
+          let groupHasVisible = false;
+          rows.forEach(r => {
+            if (!kw) {
+              r.classList.remove('sc-row-hidden');
+              visibleCount++;
+              groupHasVisible = true;
+              return;
+            }
+            const name = (r.dataset.name || '').toLowerCase();
+            const cat = (r.dataset.cat || '').toLowerCase();
+            const pid = (r.dataset.pid || '').toLowerCase();
+            const shortcut = (r.querySelector('[data-sc]')?.textContent || '').toLowerCase();
+            const match = name.includes(kw) || cat.includes(kw) || pid.includes(kw) || shortcut.includes(kw);
+            if (match) {
+              r.classList.remove('sc-row-hidden');
+              groupHasVisible = true;
+              visibleCount++;
+            } else {
+              r.classList.add('sc-row-hidden');
+            }
+          });
+          if (groupHasVisible) g.classList.remove('sc-group-hidden');
+          else g.classList.add('sc-group-hidden');
+        });
+        // 无结果提示
+        let noRes = mask.querySelector('.sc-no-result');
+        if (!kw) { if (noRes) noRes.remove(); }
+        else if (visibleCount === 0) {
+          if (!noRes) {
+            noRes = document.createElement('div');
+            noRes.className = 'sc-no-result';
+            noRes.textContent = '未找到匹配的节目，换个关键词试试';
+            mask.querySelector('#sc-mb').appendChild(noRes);
+          }
+        } else { if (noRes) noRes.remove(); }
+      });
+    }
+
+    // 绑定行内事件
+    const rows = mask.querySelectorAll('.sc-row');
+
+    // 相同 playId 跨分类出现时建立映射，用于联动同步
+    const pidToRows = new Map();
+    rows.forEach(row => {
+      const pid = row.dataset.pid;
+      if (!pidToRows.has(pid)) pidToRows.set(pid, []);
+      pidToRows.get(pid).push(row);
+    });
+    // 同步相同 pid 的其他行（快捷键/颜色）
+    function syncSamePid(sourceRow, field, value) {
+      const pid = sourceRow.dataset.pid;
+      const siblings = pidToRows.get(pid) || [];
+      for (const r of siblings) {
+        if (r === sourceRow) continue;
+        if (field === 'shortcut') {
+          const btn = r.querySelector('[data-sc]');
+          btn.textContent = value || '点击设置快捷键';
+          btn.dataset.old = value || '';
+          btn.classList.remove('err', 'recording');
+          // 清除冲突标签
+          const w = btn.closest('.shortcut-wrap');
+          if (w) w.querySelectorAll('.conflict-tag, .warn-tag').forEach(x => x.remove());
+          refreshRowTags(btn, value || '');
+        } else if (field === 'color') {
+          r.querySelector('[data-color]').value = value;
+        }
+      }
+    }
+
+    rows.forEach(row => {
+      const pid = row.dataset.pid;
+      const captureBtn = row.querySelector('[data-sc]');
+      const origCfg = consoleShortcuts.get(pid) || { shortcut:'', color:'' };
+      captureBtn.dataset.old = origCfg.shortcut || '';
+      const colorInput = row.querySelector('[data-color]');
+      const clearColorBtn = row.querySelector('[data-clearcolor]');
+      const resetBtn = row.querySelector('[data-reset]');
+
+      // 渲染初始标签（冲突：异步检测）
+      const initSc = (captureBtn.textContent || '').trim();
+      if (initSc !== '点击设置快捷键') refreshRowTags(captureBtn, initSc);
+
+      // 点击按钮 → 开始录制
+      captureBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        // 如果正在录制其他按钮，先释放
+        if (recordingCaptureBtn && recordingCaptureBtn !== captureBtn) releaseRecordingCapture();
+        if (recordingCaptureBtn === captureBtn) {
+          // 取消录制
+          releaseRecordingCapture();
+          return;
+        }
+        captureBtn.dataset.old = (captureBtn.textContent || '').trim() === '点击设置快捷键' ? '' : captureBtn.textContent.trim();
+        captureBtn.textContent = '请按快捷键…';
+        captureBtn.classList.remove('err');
+        captureBtn.classList.add('recording');
+        recordingCaptureBtn = captureBtn;
+
+        // 清除旁边旧的标签
+        const w = captureBtn.closest('.shortcut-wrap');
+        w.querySelectorAll('.conflict-tag, .warn-tag').forEach(x => x.remove());
+
+        recordingKeydownHandler = function(e) {
+          // 先禁止默认
+          e.preventDefault();
+          e.stopPropagation();
+
+          const btn = recordingCaptureBtn;
+          if (!btn) return;
+
+          // ESC：清除当前快捷键
+          if (e.key === 'Escape' && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+            btn.textContent = '点击设置快捷键';
+            btn.classList.remove('err');
+            btn.dataset.old = '';
+            releaseRecordingCapture();
+            refreshRowTags(btn, '');
+            syncSamePid(btn.closest('.sc-row'), 'shortcut', '');
+            return;
+          }
+
+          const sc = eventToShortcut(e);
+          if (!sc) return; // 只按了修饰键，继续等待
+
+          // 禁用保留快捷键
+          if (SC_RESERVED.includes(sc)) {
+            btn.textContent = '此快捷键不可用';
+            btn.classList.add('err');
+            const curRow = btn.closest('.sc-row');
+            const wrap = curRow.querySelector('.shortcut-wrap');
+            wrap.querySelectorAll('.conflict-tag, .warn-tag').forEach(x => x.remove());
+            const tag = document.createElement('span');
+            tag.className = 'conflict-tag';
+            tag.textContent = '保留';
+            tag.title = '此为系统/常用快捷键，禁止使用';
+            wrap.appendChild(tag);
+            setTimeout(() => {
+              if (btn.parentNode) {
+                const old = btn.dataset.old || '';
+                btn.textContent = old || '点击设置快捷键';
+                btn.classList.remove('err');
+                refreshRowTags(btn, old);
+              }
+            }, 1600);
+            releaseRecordingCapture();
+            return;
+          }
+
+          // 成功
+          btn.textContent = sc;
+          btn.classList.remove('recording', 'err');
+          refreshRowTags(btn, sc);
+          syncSamePid(btn.closest('.sc-row'), 'shortcut', sc);
+          releaseRecordingCapture();
+        };
+        document.addEventListener('keydown', recordingKeydownHandler);
+      });
+
+      clearColorBtn.addEventListener('click', () => {
+        colorInput.value = '#ff6b6b';
+        syncSamePid(row, 'color', '#ff6b6b');
+      });
+      // 颜色变化时联动相同 pid 的其他行
+      colorInput.addEventListener('input', () => {
+        syncSamePid(row, 'color', colorInput.value);
+      });
+
+      // 需求3：绑定音乐按钮点击 → 弹出绑定选择弹窗
+      const bindBtn = row.querySelector('[data-bindmusic]');
+      if (bindBtn) {
+        bindBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          openBindMusicModal(pid, bindBtn, captureBtn.closest('.sc-row'));
+        });
+      }
+
+      resetBtn.addEventListener('click', () => {
+        captureBtn.textContent = '点击设置快捷键';
+        captureBtn.classList.remove('err');
+        captureBtn.dataset.old = '';
+        colorInput.value = '#ff6b6b';
+        const w = captureBtn.closest('.shortcut-wrap');
+        w.querySelectorAll('.conflict-tag, .warn-tag').forEach(x => x.remove());
+        syncSamePid(row, 'shortcut', '');
+        syncSamePid(row, 'color', '#ff6b6b');
+        setTimeout(() => refreshAllRowsDuplicateTags(), 0);
+      });
+    });
+
+    // 需求2：弹窗刚打开就扫描所有已填快捷键，把「重复」标签一次性画到所有重复行的旁边（每一行都有标记）
+    try {
+      setTimeout(() => refreshAllRowsDuplicateTags(), 0);
+    } catch(_) {}
+    // 弹窗打开后，主界面冲突/系统占用的行，批量再跑一次 refreshRowTags（错开12ms，避免打爆 globalShortcut.register）
+    try {
+      const allBtns = mask.querySelectorAll('.shortcut-capture');
+      let i = 0;
+      allBtns.forEach((b) => {
+        const v = (b.textContent || '').trim();
+        if (v && v !== '点击设置快捷键' && !b.classList.contains('err')) {
+          i++;
+          setTimeout(() => refreshRowTags(b, v), 12 * i);
+        }
+      });
+    } catch(_) {}
+  }
+
+  function closeShortcutModal() {
+    releaseRecordingCapture();
+    if (scModalEl) { scModalEl.remove(); scModalEl = null; }
+  }
+
+  // ===== 需求3：绑定音乐弹窗 =====
+  let bindMusicModalEl = null;
+  // 从主界面异步拿音乐列表（拿不到就用 localStorage 的 cachedCurrentShortcutGroups 兜底）
+  function requestMainMusicList(cb) {
+    let done = false;
+    const finish = (list) => { if (done) return; done = true; cb && cb(list); };
+    // 超时兜底
+    setTimeout(() => { if (!done) finish(fallbackMusicList()); }, 1500);
+    try {
+      if (!ipcRenderer.invoke) return finish(fallbackMusicList());
+      ipcRenderer.invoke('console-request-music-list')
+        .then(res => {
+          if (res && Array.isArray(res)) finish(res);
+          else finish(fallbackMusicList());
+        })
+        .catch(() => finish(fallbackMusicList()));
+    } catch(_) { finish(fallbackMusicList()); }
+  }
+  function fallbackMusicList() {
+    try {
+      const s = localStorage.getItem('cachedCurrentShortcutGroups');
+      if (!s) return [];
+      const groups = JSON.parse(s);
+      if (!Array.isArray(groups)) return [];
+      const list = [];
+      groups.forEach((g, gi) => {
+        const items = (g && g.items && Array.isArray(g.items)) ? g.items : [];
+        items.forEach((it, mi) => {
+          list.push({ groupIndex: gi, musicIndex: mi, groupName: g.groupName || ('分组'+(gi+1)), name: it.name || it.title || it.label || ('第'+(mi+1)+'首') });
+        });
+      });
+      return list;
+    } catch(_) { return []; }
+  }
+  function findPlayItemByPlayId(pid) {
+    for (const pl of (playlists || [])) {
+      if (!pl || !pl.playItemList) continue;
+      for (const pi of pl.playItemList) {
+        if (String(pi.playId) === String(pid)) return pi;
+      }
+    }
+    return null;
+  }
+  function openBindMusicModal(pid, bindBtn, rowEl) {
+    const pi = findPlayItemByPlayId(pid);
+    const oldBind = consoleMusicBinds.get(pid);
+    const mask = document.createElement('div');
+    mask.className = 'sc-mask';
+    mask.style.zIndex = '2147483999';
+    bindMusicModalEl = mask;
+
+    mask.innerHTML = `<div class="sc-modal" style="max-width:900px;" onclick="event.stopPropagation()">
+      <div class="sc-mh">
+        <div>
+          <span class="title">🎵 绑定音乐 — 控台：${escapeHtml(pi ? (pi.playName || '未命名') : ('ID:'+pid))}</span>
+          <span class="tips" style="margin-left:12px;">选择主界面的一首音乐与此控台按钮绑定。双向同步开关开启时，任一方播放都会触发另一方。</span>
+        </div>
+        <button class="close" data-close>✕</button>
+      </div>
+      <div class="sc-toolbar" style="border-top:none; border-bottom:1px solid var(--borderColor);">
+        <span id="bm-loading" style="color:var(--primary);">正在获取主界面音乐列表…</span>
+        <span class="spacer"></span>
+        <span class="tips-2">提示：如果列表为空或不准确，请先到主界面点一次「刷新」或重新进入主界面。</span>
+      </div>
+      <div class="sc-mb" id="bm-mb" style="max-height:55vh; padding:8px 10px;">
+        <div style="padding:18px; color:var(--textSecondary); text-align:center;">加载中…</div>
+      </div>
+      <div class="sc-mf">
+        <button class="btn btn-default" data-unbind>解除绑定</button>
+        <button class="btn btn-default" data-close>取消</button>
+        <button class="btn btn-primary" data-ok disabled>确定（请先选择一首音乐）</button>
+      </div>
+    </div>`;
+    document.body.appendChild(mask);
+
+    let selected = null; // { groupIndex, musicIndex, groupName, name }
+    const btnOk = mask.querySelector('[data-ok]');
+    const btnUnbind = mask.querySelector('[data-unbind]');
+    const closeBtns = mask.querySelectorAll('[data-close]');
+    const closeFn = () => { if (bindMusicModalEl === mask) { mask.remove(); bindMusicModalEl = null; } };
+    closeBtns.forEach(b => b.addEventListener('click', closeFn));
+    mask.addEventListener('click', (e) => { if (e.target === mask) closeFn(); });
+
+    // 解除绑定
+    btnUnbind.addEventListener('click', () => {
+      consoleMusicBinds.delete(pid);
+      saveConsoleMusicBinds();
+      if (bindBtn) {
+        bindBtn.textContent = '🎵 绑定音乐';
+        bindBtn.classList.remove('has-bind');
+      }
+      closeFn();
+    });
+
+    // 确定
+    btnOk.addEventListener('click', () => {
+      if (!selected) return;
+      consoleMusicBinds.set(pid, { groupIndex: selected.groupIndex, musicIndex: selected.musicIndex, name: selected.name || '', groupName: selected.groupName || '' });
+      saveConsoleMusicBinds();
+      if (bindBtn) {
+        const display = (selected.name || ('第'+(selected.groupIndex+1)+'组 第'+(selected.musicIndex+1)+'首'));
+        bindBtn.textContent = '🎵 绑定：' + display;
+        bindBtn.classList.add('has-bind');
+      }
+      closeFn();
+    });
+
+    // 异步取列表并渲染
+    requestMainMusicList((list) => {
+      if (!bindMusicModalEl || bindMusicModalEl !== mask) return;
+      const mb = mask.querySelector('#bm-mb');
+      const loading = mask.querySelector('#bm-loading');
+      if (loading) loading.remove();
+      if (!list || list.length === 0) {
+        mb.innerHTML = `<div style="padding:24px; text-align:center; color:var(--textSecondary);">主界面还没有音乐，或者无法获取列表。请先在主界面添加音乐或刷新一下。</div>`;
+        return;
+      }
+      // 分分组渲染
+      let html = '';
+      list.forEach(x => x._gi = x.groupIndex);
+      const groupsArr = [];
+      const groupMap = new Map();
+      list.forEach(it => {
+        const key = String(it.groupIndex);
+        if (!groupMap.has(key)) { groupMap.set(key, { groupIndex: it.groupIndex, groupName: it.groupName, items: [] }); groupsArr.push(groupMap.get(key)); }
+        groupMap.get(key).items.push(it);
+      });
+      groupsArr.sort((a,b) => a.groupIndex - b.groupIndex);
+      groupsArr.forEach(g => {
+        html += `<div class="bm-group" data-gi="${g.groupIndex}"><div class="bm-gh">📁 ${escapeHtml(g.groupName || ('分组'+(g.groupIndex+1)))}</div><div class="bm-gl">`;
+        g.items.forEach(it => {
+          const selectedCls = (oldBind && oldBind.groupIndex === it.groupIndex && oldBind.musicIndex === it.musicIndex) ? ' selected' : '';
+          html += `<div class="bm-item${selectedCls}" data-gi="${it.groupIndex}" data-mi="${it.musicIndex}" data-name="${escapeHtml(it.name||'')}" data-gname="${escapeHtml(g.groupName||'')}" title="${escapeHtml(it.name||'')}">
+            <span class="bm-chk"></span>
+            <span class="bm-idx">${it.musicIndex+1}.</span>
+            <span class="bm-name">${escapeHtml(it.name || '未命名')}</span>
+          </div>`;
+        });
+        html += '</div></div>';
+      });
+      mb.innerHTML = html;
+
+      // 选一个（单选）
+      mb.querySelectorAll('.bm-item').forEach(el => {
+        el.addEventListener('click', () => {
+          mb.querySelectorAll('.bm-item.selected').forEach(x => x.classList.remove('selected'));
+          el.classList.add('selected');
+          const gi = Number(el.dataset.gi), mi = Number(el.dataset.mi);
+          selected = { groupIndex: gi, musicIndex: mi, name: el.dataset.name || '', groupName: el.dataset.gname || '' };
+          btnOk.disabled = false;
+          btnOk.textContent = `确定：绑定至「${selected.name || '第'+(mi+1)+'首'}」`;
+        });
+        // 初始化：如果当前行有已绑定，就选中它
+        if (oldBind && oldBind.groupIndex === Number(el.dataset.gi) && oldBind.musicIndex === Number(el.dataset.mi)) {
+          el.classList.add('selected');
+          selected = { groupIndex: oldBind.groupIndex, musicIndex: oldBind.musicIndex, name: oldBind.name || el.dataset.name || '', groupName: oldBind.groupName || el.dataset.gname || '' };
+          btnOk.disabled = false;
+          btnOk.textContent = `确定：绑定至「${selected.name || '第'+(oldBind.musicIndex+1)+'首'}」`;
+        }
+      });
+    });
+  }
+  function escapeHtml(s) {
+    return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function saveShortcutModal() {
+    const rows = document.querySelectorAll('#sc-mb .sc-row');
+    const newMap = new Map();
+    // 未列出的playId保留旧的（可能在其他分类里）
+    for (const [k, v] of consoleShortcuts.entries()) newMap.set(k, v);
+
+    let hasConflict = false;
+    const conflictMsgs = [];
+
+    // 1) 先按 pid 收集快捷键（相同场景在多个分类下出现时取第一个有值的，不重复计数）
+    const pidFirstShortcut = new Map();
+    rows.forEach(row => {
+      const pid = row.dataset.pid;
+      if (pidFirstShortcut.has(pid)) return; // 已取过
+      const captureBtn = row.querySelector('[data-sc]');
+      let s = (captureBtn.textContent || '').trim();
+      if (s === '' || s === '点击设置快捷键') return;
+      if (captureBtn.classList.contains('err')) return;
+      pidFirstShortcut.set(pid, s);
+    });
+
+    // 2) 内部重复检测（按 pid 去重后，不同 pid 用了相同快捷键才算重复）
+    const counter = new Map();
+    for (const s of pidFirstShortcut.values()) {
+      counter.set(s, (counter.get(s) || 0) + 1);
+    }
+
+    // 3) 按 pid 合并所有 row 的设置：相同场景跨分类出现时取有值的那个，避免后遍历的空值覆盖前面的设置
+    const pidCfg = new Map();
+    rows.forEach(row => {
+      const pid = row.dataset.pid;
+      const captureBtn = row.querySelector('[data-sc]');
+      let shortcut = (captureBtn.textContent || '').trim();
+      if (shortcut === '点击设置快捷键') shortcut = '';
+      if (captureBtn.classList.contains('err')) shortcut = '';
+      // 内部重复的：都当作没设置，统一提示
+      if (shortcut && counter.get(shortcut) > 1) {
+        hasConflict = true;
+        if (!conflictMsgs.includes('存在重复快捷键：' + shortcut)) conflictMsgs.push('存在重复快捷键：' + shortcut);
+        shortcut = '';
+      }
+
+      let color = row.querySelector('[data-color]').value;
+      if (!color) color = '';
+
+      if (!pidCfg.has(pid)) pidCfg.set(pid, { shortcut: '', color: '' });
+      const cur = pidCfg.get(pid);
+      // 快捷键：取第一个非空值
+      if (shortcut && !cur.shortcut) cur.shortcut = shortcut;
+      // 颜色：优先取非默认色(#ff6b6b)，其次取第一个非空值
+      if (color && color !== '#ff6b6b' && (cur.color === '#ff6b6b' || !cur.color)) {
+        cur.color = color;
+      } else if (color && !cur.color) {
+        cur.color = color;
+      }
+    });
+
+    // 4) 写入 newMap
+    for (const [pid, cfg] of pidCfg) {
+      if (cfg.shortcut || cfg.color) {
+        newMap.set(String(pid), { shortcut: cfg.shortcut, color: cfg.color, action: 'toggle' });
+      } else {
+        newMap.delete(String(pid));
+      }
+    }
+
+    consoleShortcuts = newMap;
+    saveConsoleShortcuts();
+
+    // 注册到主进程
+    const result = registerAllShortcutsToMain() || {};
+
+    // 保存双向同步开关
+    try {
+      const cb = document.getElementById('scSyncEnabled');
+      if (cb) {
+        musicSyncEnabled = !!cb.checked;
+        localStorage.setItem('consoleMusicSyncEnabled', musicSyncEnabled ? '1' : '0');
+      }
+    } catch(_) {}
+    // 音乐绑定持久化（用户在绑定子弹窗时已实时写，这里再次兜底）
+    saveConsoleMusicBinds();
+
+    // 需求2：与主界面重复但已允许保存（不是冲突，是提示）
+    if (result.mainWarningsDetail && result.mainWarningsDetail.length > 0) {
+      const parts = result.mainWarningsDetail.map(x => {
+        const w = x.with || {};
+        const display = (w.displayName || (w.module||'主界面')+' 组'+((w.groupIndex||0)+1)+' 第'+((w.musicIndex||0)+1)+'首');
+        return `${x.sc} → 与主界面「${display}」相同（主界面优先触发，控台侧保存配置但不生效）`;
+      });
+      // warning 不算是 hasConflict，但仍然给提示
+      conflictMsgs.push('💡 以下快捷键与主界面同名，允许保存，但实际触发以主界面功能为准：\n      ' + parts.join('\n      '));
+    }
+    if (result.mainConflicts && result.mainConflicts.length > 0) {
+      hasConflict = true;
+      conflictMsgs.push(`⚠️ 以下与主界面已有快捷键冲突（禁止设置）：${result.mainConflicts.join('、')}`);
+    }
+    if (result.duplicateConflicts && result.duplicateConflicts.length > 0) {
+      hasConflict = true;
+      conflictMsgs.push(`存在重复快捷键（均未生效）：${result.duplicateConflicts.join('、')}`);
+    }
+    if (result.systemConflicts && result.systemConflicts.length > 0) {
+      hasConflict = true;
+      conflictMsgs.push(`以下被系统或其他程序占用：${result.systemConflicts.join('、')}`);
+    }
+    if (result.failed && result.failed.length > 0) {
+      hasConflict = true;
+      conflictMsgs.push(`以下无效未能生效：${result.failed.join('、')}`);
+    }
+    // 保留旧接口兼容（只有 conflicts 老字段的情况也继续给兜底提示）
+    if ((!result.mainConflicts && !result.duplicateConflicts) && result.conflicts && result.conflicts.length > 0) {
+      hasConflict = true;
+      conflictMsgs.push(`以下与已有/系统冲突，未能生效：${result.conflicts.join('、')}`);
+    }
+    closeShortcutModal();
+    // 重渲染（应用自定义颜色）
+    renderPlaylists();
+    if (hasConflict || conflictMsgs.length > 0) {
+      const title = hasConflict ? '保存完成，但部分快捷键未能生效' : '保存完成（有提示项）';
+      setTimeout(() => alert(title + '：\n\n' + conflictMsgs.join('\n\n')), 100);
+    }
+  }
+
+  // ========== 需求3：同步双向播放 ==========
+  // 控台某个 playId 被播放/停止 → 如果绑定了主界面音乐且总开关开启 → 通知主进程转发给主界面去操作对应音乐
+  // 去重：同一 playId+action 在 2.5s 内只通知一次（防止 用户点击→1004回执→重复触发音乐）
+  function notifyMainMusicByPlayId(playId, action) {
+    try {
+      if (!musicSyncEnabled) return;
+      // 支持三种动作：1=播放 2=暂停 4=停止
+      if (action !== 1 && action !== 4 && action !== 2) return;
+      const pid = String(playId);
+      // 去重：2.5s 内相同的 playId+action 不重复发送
+      const now = Date.now();
+      if (_lastNotifyMusic.pid === pid && _lastNotifyMusic.action === action && (now - _lastNotifyMusic.ts) < 2500) return;
+      _lastNotifyMusic = { pid: pid, action: action, ts: now };
+      const bind = consoleMusicBinds.get(pid);
+      if (!bind) return;
+      if (!ipcRenderer || !ipcRenderer.send) return;
+      ipcRenderer.send('console-play-music', {
+        groupIndex: bind.groupIndex,
+        musicIndex: bind.musicIndex,
+        action: action, // 1=播放, 2=暂停, 4=停止
+        origin: 'console'
+      });
+    } catch(_) {}
+  }
+  // 主界面音乐播放/停止 → 找到对应绑定的控台 playId → sendPlayControl 触发控台
+  let syncPlayFromMainInProgress = false; // 防递归：如果同步触发的播放不要再通知回主界面
+  try {
+    ipcRenderer.on('sync-play-from-main', (e, payload) => {
+      try {
+        if (!payload) return;
+        if (!musicSyncEnabled) return;
+        if (payload.origin !== 'main') return;
+        const gi = payload.groupIndex, mi = payload.musicIndex;
+        const action = payload.action == null ? 1 : (Number(payload.action) || 1);
+        let matchedPlayId = null;
+        for (const [pid, bind] of consoleMusicBinds.entries()) {
+          if (bind.groupIndex === gi && bind.musicIndex === mi) { matchedPlayId = pid; break; }
+        }
+        if (!matchedPlayId) return;
+        const found = findPlayItem(null, matchedPlayId);
+        if (!found) return;
+        const { pl, pi } = found;
+        const stateNum = pi.playState || 0;
+        // Fix2a: 关闭场景时，先判断场景是否打开（未打开则不发指令）
+        if (action === 4) {
+          if (stateNum !== 1 && stateNum !== 2) return; // 场景未打开，无需关闭
+        }
+        // ★ 暂停（action=2）：控台协议 controlType=2 → 发送给控台
+        let ctrl = action === 4 ? 4 : (action === 1 ? 1 : (action === 2 ? 2 : null));
+        // 兜底：toggle 逻辑（action 未知时按 toggle 处理，与点击按钮一致）
+        if (ctrl == null) ctrl = (stateNum === 1 || stateNum === 2) ? 4 : 1;
+        // 标记同步播放，防止 sendPlayControl 之后又通知主界面（循环）
+        syncPlayFromMainInProgress = true;
+        try {
+          selectedPlayItem = {
+            playListId: pl.listId, playListName: pl.listName,
+            playType: pi.playType, playId: pi.playId, playName: pi.playName
+          };
+          sendPlayControl(ctrl);
+          pi.playState = (ctrl === 1) ? 1 : (ctrl === 2 ? 2 : 0);
+          if (ctrl === 1) applySceneMutexAfter(pi.playId);
+          renderPlaylists();
+          triggerRefreshFlash();
+        } finally {
+          setTimeout(() => { syncPlayFromMainInProgress = false; }, 3000);
+        }
+      } catch(_) {}
+    });
+  } catch(_) {}
+
+  // ========== 快捷键触发：主进程回调 → 播放/停止切换 ==========
+  // Fix1: 防抖锁，防止本地 keydown 和全局 globalShortcut 同时触发导致双击
+  let _shortcutTriggerLock = 0;
+  function _triggerShortcutByPlayId(playId) {
+    const found = findPlayItem(null, playId);
+    if (!found) return;
+    const { pl, pi } = found;
+    const stateNum = pi.playState || 0;
+    selectedPlayItem = {
+      playListId: pl.listId, playListName: pl.listName,
+      playType: pi.playType, playId: pi.playId, playName: pi.playName
+    };
+    const ctrl = (stateNum === 1 || stateNum === 2) ? 4 : 1;
+    sendPlayControl(ctrl);
+    pi.playState = (ctrl === 1) ? 1 : 0;
+    if (!syncPlayFromMainInProgress) notifyMainMusicByPlayId(pi.playId, ctrl);
+    if (ctrl === 1) applySceneMutexAfter(pi.playId);
+    renderPlaylists();
+    triggerRefreshFlash();
+  }
+  try {
+    ipcRenderer.on('console-shortcut-triggered', (e, bind) => {
+      if (!bind || !bind.playId) return;
+      // Fix1: 如果本地 keydown 刚触发过（300ms内），跳过全局回调，避免双触发
+      const now = Date.now();
+      if (now - _shortcutTriggerLock < 300) return;
+      _shortcutTriggerLock = now;
+      _triggerShortcutByPlayId(bind.playId);
+    });
+  } catch(_) {}
+
+  // Fix1: 本地快捷键监听 —— 控台窗口聚焦时，无需全局开关即可使用快捷键
+  try {
+    document.addEventListener('keydown', function(e) {
+      // 正在录入快捷键（快捷键设置弹窗）时不拦截
+      if (scModalEl || recordingCaptureBtn || recordingKeydownHandler) return;
+      // 输入框/文本域中不拦截
+      var tag = (e.target && e.target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
+
+      var sc = eventToShortcut(e);
+      if (!sc) return;
+      if (SC_RESERVED.indexOf(sc) >= 0) return;
+
+      // 在 consoleShortcuts 中查找匹配
+      var matchedPid = null;
+      consoleShortcuts.forEach(function(cfg, pid) {
+        if (!matchedPid && cfg.shortcut === sc) matchedPid = pid;
+      });
+      if (!matchedPid) return;
+
+      // 防抖：避免与全局 globalShortcut 双触发
+      var now = Date.now();
+      if (now - _shortcutTriggerLock < 300) return;
+      _shortcutTriggerLock = now;
+
+      e.preventDefault();
+      e.stopPropagation();
+      _triggerShortcutByPlayId(matchedPid);
+    });
+  } catch(_) {}
+
+  // ==================== 底部启动期立即执行 IIFE（只包"立刻执行"的语句；catch 时写顶部红条） ====================
+  // 注意：函数声明 / const / let 不能放在这里面，否则会被作用域隔离，按钮 inline onclick 会找不到函数。
+  (function bootEndImmediateOnly(){
+    try {
+
+  // ========== 内容变更（controlType=7/8）时：刷新列表后自动清理无效快捷键 ==========
+  // （在 handleMessage 里 scheduleAutoRefresh → MSG_QUERY_LIST响应 → 重新渲染 playlists
+  //  重渲染时渲染函数会自动按 data-color 覆盖样式；关闭窗口时或下次设置前手动清理）
+  // 在 MSG_QUERY_LIST响应后触发一次 cleanupInvalidShortcuts + 重新注册
+  const _origRenderPlaylists = renderPlaylists;
+  window._origRenderPlaylists = _origRenderPlaylists; // 暴露到 window 做 fallback 兜底
+  renderPlaylists = function() {
+    try {
+      // 只在数据真正加载过才清；否则只渲染不清理，防止 localStorage 被误清空
+      if (consoleDataLoadedOnce && playlists && playlists.length > 0) {
+        try { cleanupInvalidShortcuts(); } catch(e) {
+          try { console.error('cleanupInvalidShortcuts error (safe ignore):', e && e.message || e); } catch(_) {}
+        }
+      }
+    } catch(_) {}
+    try {
+      _origRenderPlaylists.call(this);
+    } catch(e) {
+      try { console.error('renderPlayLists inner exception:', e && e.message || e); } catch(_) {}
+    }
+  };
+
+  // ========== 窗口关闭保护：连接过程中或任何时候点 ×/Alt+F4 必须能顺利关掉 ==========
+  // 渲染进程 beforeunload：先强制断开连接、取消全局快捷键、移除所有监听，避免任何同步阻塞导致关不掉
+  try {
+    window.addEventListener('beforeunload', (ev) => {
+      try { releaseRecordingCapture(); } catch(_) {}
+      // 释放快捷键 document 监听
+      try {
+        if (recordingKeydownHandler) {
+          document.removeEventListener('keydown', recordingKeydownHandler);
+          recordingKeydownHandler = null;
+        }
+      } catch(_) {}
+      // 先关 socket：保证任何连接中/收包的阻塞都终止
+      try {
+        // doDisconnect 里面会 destroy socket、清 timer、设 disconnected、发送空数组注销控台全局快捷键
+        doDisconnect();
+      } catch(_) {}
+      // 再尝试一次兜底的快捷键注销（主进程侧窗口 close 事件也会做）
+      try {
+        // 即使没有快捷键也尝试发一次空数组：确保快捷键注销
+        ipcRenderer.send('console-shortcut-register', []);
+      } catch(_) {}
+      // 不需要 returnValue（不需要确认框）
+    });
+  } catch(_) {}
+
+  // 初始化
+  try { setConnState('disconnected'); } catch(_) {}
+  // 自动连接（延迟500ms等主题应用完成，每次打开窗口都自动连接）
+  setTimeout(function(){ try { doConnect(); } catch(_) {} }, 500);
+
+  // ========== 控台全局快捷键开关 ==========
+  try {
+    var _scToggle = document.getElementById('consoleScToggle');
+    var _scStatus = document.getElementById('consoleScStatus');
+    // 从 localStorage 恢复开关状态
+    var _savedSc = localStorage.getItem('consoleShortcutEnabled');
+    var _scOn = (_savedSc === 'true');
+    if (_scToggle) _scToggle.checked = _scOn;
+    function _updateScUI(on){
+      if (_scStatus) {
+        _scStatus.textContent = on ? '已开启' : '已关闭';
+        _scStatus.className = on ? 'sc-toggle-status on' : 'sc-toggle-status off';
+      }
+    }
+    _updateScUI(_scOn);
+    // 初始化时同步主进程状态
+    try { ipcRenderer.send('console-shortcut-toggle', _scOn); } catch(_) {}
+    // 开关事件
+    if (_scToggle) {
+      _scToggle.addEventListener('change', function(e){
+        var enabled = e.target.checked;
+        localStorage.setItem('consoleShortcutEnabled', enabled ? 'true' : 'false');
+        _updateScUI(enabled);
+        try { ipcRenderer.send('console-shortcut-toggle', enabled); } catch(_) {}
+      });
+    }
+    // 主进程通知重新注册（开关从关→开时）
+    ipcRenderer.on('console-shortcut-reregister', function(){
+      try { registerAllShortcutsToMain(); } catch(_) {}
+    });
+  } catch(_) {}
+
+  // 窗口关闭/重新打开时：注册已保存的快捷键（延时到list加载后，仅当开关开启时）
+  setTimeout(function(){
+    try {
+      var _on = localStorage.getItem('consoleShortcutEnabled') === 'true';
+      if (_on) registerAllShortcutsToMain();
+    } catch(_) {}
+  }, 1500);
+
+  // ========== AI触发功能 ==========
+  // 配置：{ enabled, switchMode, playIds }，存 localStorage，记忆状态
+  // 注意：IIFE 内部声明的函数 onclick 找不到，所以全部挂到 window 上
+  window.aiTriggerConfig = { enabled: false, switchMode: 'paragraph', playIds: [] };
+  let aiTriggerConfig = window.aiTriggerConfig; // 简写别名
+
+  window.loadAiTriggerConfig = function loadAiTriggerConfig() {
+    try {
+      aiTriggerConfig.enabled = localStorage.getItem('aiTriggerEnabled') === '1';
+      const cfg = localStorage.getItem('aiTriggerConfig');
+      if (cfg) {
+        const p = JSON.parse(cfg);
+        if (p.switchMode) aiTriggerConfig.switchMode = p.switchMode;
+        if (Array.isArray(p.playIds)) aiTriggerConfig.playIds = p.playIds;
+        // 音乐停止后关闭播放（默认 false，避免老用户数据里没有导致未定义）
+        aiTriggerConfig.stopScenesOnMusicStop = (p.stopScenesOnMusicStop === true);
+      }
+    } catch(_) {}
+  };
+
+  // 换控台连接/重新加载节目列表后：过滤掉"当前控台不存在"的 playId，防止旧控台勾选的 ID 带到新控台
+  // 过滤完成后：写回 localStorage 并立即推送给主窗口 AiTrigger.config
+  window.normalizeAiTriggerAfterPlaylistLoad = function normalizeAiTriggerAfterPlaylistLoad() {
+    try {
+      if (!Array.isArray(playlists) || playlists.length === 0) return;
+      // 收集当前控台所有真实 playId（字符串化，统一比较）
+      const realSet = new Set();
+      playlists.forEach(function(pl) {
+        const items = (pl && (pl.playItemList || pl.items)) || [];
+        items.forEach(function(pi) { if (pi && pi.playId !== undefined && pi.playId !== null) realSet.add(String(pi.playId)); });
+      });
+      if (realSet.size === 0) return;
+      const before = Array.isArray(aiTriggerConfig.playIds) ? aiTriggerConfig.playIds.slice() : [];
+      const after = before.filter(function(pid) { return realSet.has(String(pid)); });
+      // 标记是否变化：长度变 或 元素不同（顺序不影响）
+      let changed = (after.length !== before.length);
+      if (!changed) {
+        const bs = new Set(before.map(String));
+        for (let i = 0; i < after.length; i++) { if (!bs.has(String(after[i]))) { changed = true; break; } }
+      }
+      aiTriggerConfig.playIds = after;
+      try {
+        localStorage.setItem('aiTriggerConfig', JSON.stringify({
+          switchMode: aiTriggerConfig.switchMode,
+          playIds: aiTriggerConfig.playIds,
+          stopScenesOnMusicStop: aiTriggerConfig.stopScenesOnMusicStop
+        }));
+      } catch(_) {}
+      // 推送给主窗口（主窗口 AiTrigger.setConfig 会立即应用新 playIds 池）
+      try { ipcRenderer.send('ai-trigger-config', aiTriggerConfig); } catch(_) {}
+      if (changed) {
+        try { console.log('[AI触发] 换控台后归一 playIds：旧=' + JSON.stringify(before) + ' 新=' + JSON.stringify(after)); } catch(_) {}
+      }
+    } catch(_) {}
+  };
+
+  window.updateAiTriggerUI = function updateAiTriggerUI(on) {
+    const st = document.getElementById('aiTriggerStatus');
+    if (st) {
+      st.textContent = on ? '已开启' : '已关闭';
+      st.className = 'sc-toggle-status ' + (on ? 'on' : 'off');
+    }
+  };
+
+  window.onAiTriggerToggle = function onAiTriggerToggle() {
+    const tg = document.getElementById('aiTriggerToggle');
+    if (!tg) return;
+    const on = tg.checked;
+    aiTriggerConfig.enabled = on;
+    try { localStorage.setItem('aiTriggerEnabled', on ? '1' : '0'); } catch(_) {}
+    updateAiTriggerUI(on);
+    // 同步配置到主窗口（AI分析在主窗口执行）
+    try { ipcRenderer.send('ai-trigger-config', aiTriggerConfig); } catch(_) {}
+  };
+
+  window.openAiTriggerModal = function openAiTriggerModal() {
+    // 收集节目项：保留分组信息便于批量勾选，同时拍平便于搜索/渲染
+    const groups = [];       // [{groupName, items:[{playId, playName}]}]
+    const flatItems = [];    // [{playId, playName, groupName}]
+    try {
+      (playlists || []).forEach(pl => {
+        const items = (pl.playItemList || pl.items || []).map(pi => ({
+          playId: String(pi.playId),
+          playName: pi.playName || pi.name || ('场景' + pi.playId)
+        }));
+        if (items.length === 0) return;
+        const groupName = pl.listName || pl.name || ('分组' + groups.length);
+        groups.push({ groupName: groupName, items: items });
+        items.forEach(it => {
+          if (!flatItems.find(x => x.playId === it.playId)) {
+            flatItems.push({ playId: it.playId, playName: it.playName, groupName: groupName });
+          }
+        });
+      });
+    } catch(_) {}
+
+    const mask = document.createElement('div');
+    mask.className = 'sc-mask';
+    mask.id = 'aiTriggerMask';
+    mask.innerHTML = '<div class="sc-modal" style="max-width:600px;" onclick="event.stopPropagation()">' +
+      '<div class="sc-mh"><div><span class="title">AI 触发设置</span>' +
+      '<span class="tips" style="margin-left:12px;">开启开关后，播放音乐时自动分析音频并触发选定的控台场景</span></div>' +
+      '<button class="close" onclick="closeAiTriggerModal()">✕</button></div>' +
+      '<div class="sc-mb">' +
+        '<div class="at-section"><label class="at-label">切换模式</label>' +
+        '<select class="at-select" id="atSwitchMode">' +
+          '<option value="paragraph">段落切换（主歌→副歌→间奏，一首歌切3-5次）</option>' +
+          '<option value="beat">每拍切换（每个beat切一个场景）</option>' +
+          '<option value="bar">每小节切换（每4拍切一个场景）</option>' +
+        '</select>' +
+        // 停止音乐后关闭场景：在切换模式下面一行，同 section 内
+        '<label class="at-chk" style="display:flex;align-items:center;gap:6px;margin-top:8px;">' +
+          '<input type="checkbox" id="atStopScenesOnMusicStop">' +
+          '<span style="font-size:12px;color:var(--text);">音乐停止后关闭播放</span>' +
+          '<span style="font-size:11px;color:var(--textSecondary);margin-left:4px;">（勾选后：音乐停止/切歌时，自动关闭本次已勾选触发范围中的所有正在播放的场景）</span>' +
+        '</label></div>' +
+        '<div class="at-section">' +
+          '<label class="at-label">触发场景范围' +
+            ' <span id="atPoolCount" style="font-weight:normal;color:var(--textSecondary);font-size:11px;">(已选 0 个)</span>' +
+          '</label>' +
+          '<div class="at-desc">勾选要自动触发的控台节目，AI只在这组场景里切换，不影响其他场景</div>' +
+          // 搜索框 + 快捷按钮
+          '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">' +
+            '<input type="text" id="atPoolSearch" class="at-select" placeholder="🔍 搜索场景名..." style="flex:1;">' +
+            '<button type="button" class="btn btn-default" id="atBtnAll" style="padding:6px 10px;">全选</button>' +
+            '<button type="button" class="btn btn-default" id="atBtnInverse" style="padding:6px 10px;">反选</button>' +
+            '<button type="button" class="btn btn-default" id="atBtnClear" style="padding:6px 10px;">清空</button>' +
+          '</div>' +
+          // 分组批量勾选（折叠按钮）
+          (groups.length > 1 ? '<div id="atGroupBar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>' : '') +
+          '<div class="at-pool" id="atPool"></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="sc-mf">' +
+        '<button class="btn btn-default" onclick="closeAiTriggerModal()">取消</button>' +
+        '<button class="btn btn-primary" onclick="saveAiTriggerModal()">确定</button>' +
+      '</div>' +
+    '</div>';
+
+    mask.onclick = () => closeAiTriggerModal();
+    document.body.appendChild(mask);
+
+    // 设置切换模式当前值
+    const sel = mask.querySelector('#atSwitchMode');
+    if (sel) sel.value = aiTriggerConfig.switchMode;
+    const stopCb = mask.querySelector('#atStopScenesOnMusicStop');
+    if (stopCb) stopCb.checked = !!aiTriggerConfig.stopScenesOnMusicStop;
+
+    // ===== 场景池渲染 + 快捷操作 =====
+    const poolEl = mask.querySelector('#atPool');
+    const searchEl = mask.querySelector('#atPoolSearch');
+    const countEl = mask.querySelector('#atPoolCount');
+    const groupBar = mask.querySelector('#atGroupBar');
+
+    // 当前已选集合（使用 Map 便于修改）
+    const selectedSet = new Set(aiTriggerConfig.playIds);
+
+    // 渲染列表
+    function renderPool(filterText) {
+      if (!poolEl) return;
+      const ft = (filterText || '').trim().toLowerCase();
+      if (flatItems.length === 0) {
+        poolEl.innerHTML = '<div class="at-pool-empty">还没有节目内容，请先连接控台并加载内容</div>';
+        if (countEl) countEl.textContent = '(已选 0 个)';
+        return;
+      }
+      // 按分组渲染
+      let html = '';
+      groups.forEach(function(g) {
+        const groupItems = g.items.filter(it => {
+          if (!ft) return true;
+          return it.playName.toLowerCase().includes(ft) ||
+                 it.playId.includes(ft) ||
+                 g.groupName.toLowerCase().includes(ft);
+        });
+        if (groupItems.length === 0) return; // 过滤后空组跳过
+        const gAllChecked = groupItems.every(it => selectedSet.has(it.playId));
+        const gid = 'atGroup_' + escapeHtml(g.groupName);
+        html += '<div class="at-group" style="margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px;">' +
+          '<div style="display:flex;align-items:center;gap:6px;padding:3px 2px;cursor:pointer;" id="' + gid + 'Hdr" data-group="' + escapeAttr(g.groupName) + '">' +
+            '<span style="font-size:12px;color:var(--accent);font-weight:bold;">▼ ' + escapeHtml(g.groupName) + '</span>' +
+            '<span style="font-size:10px;color:var(--textSecondary);">(' + groupItems.length + '项)</span>' +
+            '<button type="button" class="btn btn-default" style="margin-left:auto;padding:2px 8px;font-size:10px;font-weight:normal;" data-groupselect="' + escapeAttr(g.groupName) + '">' +
+              (gAllChecked ? '取消本组' : '全选本组') + '</button>' +
+          '</div>' +
+          '<div id="' + gid + 'Body" style="padding-top:4px;">' +
+          groupItems.map(it => {
+            const checked = selectedSet.has(it.playId) ? 'checked' : '';
+            return '<label class="at-pool-item"><input type="checkbox" class="at-pool-cb" value="' + it.playId + '" data-name="' + escapeAttr(it.playName) + '" ' + checked + '>' +
+              '<span>' + escapeHtml(it.playName) + '<sub style="color:var(--textSecondary);font-size:10px;margin-left:4px;">#' + it.playId + '</sub></span></label>';
+          }).join('') +
+          '</div></div>';
+      });
+      // 搜索空提示
+      const anyShown = groups.some(g => g.items.some(it => {
+        if (!ft) return true;
+        return it.playName.toLowerCase().includes(ft) ||
+               it.playId.includes(ft) ||
+               g.groupName.toLowerCase().includes(ft);
+      }));
+      if (!anyShown) html = '<div class="at-pool-empty">没有匹配的场景，试试其他关键词</div>';
+      poolEl.innerHTML = html;
+      updateCount();
+    }
+
+    function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function escapeAttr(s) { return escapeHtml(s); }
+
+    function updateCount() {
+      if (countEl) countEl.textContent = '(已选 ' + selectedSet.size + ' 个)';
+    }
+
+    // 分组标签批量选择（只渲染，不影响列表）
+    function renderGroupTags() {
+      if (!groupBar) return;
+      groupBar.innerHTML = groups.map(function(g) {
+        return '<button type="button" class="btn btn-default" data-groupselect="' + escapeAttr(g.groupName) + '" style="padding:3px 10px;font-size:11px;">' + escapeHtml(g.groupName) + '</button>';
+      }).join('');
+    }
+    renderGroupTags();
+
+    // 事件：搜索框实时过滤
+    if (searchEl) {
+      searchEl.addEventListener('input', function(e) { renderPool(e.target.value); });
+    }
+
+    // 事件：全选/清空/反选
+    const btnAll = mask.querySelector('#atBtnAll');
+    const btnClear = mask.querySelector('#atBtnClear');
+    const btnInverse = mask.querySelector('#atBtnInverse');
+    function getVisibleCbs() {
+      if (!poolEl) return [];
+      return Array.from(poolEl.querySelectorAll('.at-pool-cb'));
+    }
+    if (btnAll) btnAll.addEventListener('click', function() {
+      // 全选：当前可见的（受搜索过滤）全勾上
+      getVisibleCbs().forEach(cb => { cb.checked = true; selectedSet.add(cb.value); });
+      renderPool(searchEl ? searchEl.value : '');
+    });
+    if (btnClear) btnClear.addEventListener('click', function() {
+      // 清空：当前可见的全取消（或全局清空）
+      selectedSet.clear();
+      renderPool(searchEl ? searchEl.value : '');
+    });
+    if (btnInverse) btnInverse.addEventListener('click', function() {
+      // 反选：当前可见的
+      getVisibleCbs().forEach(cb => {
+        if (cb.checked) { cb.checked = false; selectedSet.delete(cb.value); }
+        else { cb.checked = true; selectedSet.add(cb.value); }
+      });
+      renderPool(searchEl ? searchEl.value : '');
+    });
+
+    // 事件：分组全选（列表内按钮 + 顶部标签按钮）
+    function groupToggle(groupName) {
+      const g = groups.find(gx => gx.groupName === groupName);
+      if (!g) return;
+      const allIn = g.items.every(it => selectedSet.has(it.playId));
+      g.items.forEach(it => {
+        if (allIn) selectedSet.delete(it.playId);
+        else selectedSet.add(it.playId);
+      });
+      renderPool(searchEl ? searchEl.value : '');
+    }
+    if (groupBar) {
+      groupBar.addEventListener('click', function(e) {
+        const btn = e.target.closest('[data-groupselect]');
+        if (btn) { e.preventDefault(); groupToggle(btn.getAttribute('data-groupselect')); }
+      });
+    }
+    if (poolEl) {
+      poolEl.addEventListener('click', function(e) {
+        // 分组内全选本组按钮
+        const btn = e.target.closest('[data-groupselect]');
+        if (btn) { e.preventDefault(); groupToggle(btn.getAttribute('data-groupselect')); return; }
+        // 折叠分组（点标题栏）
+        const hdr = e.target.closest('[data-group]');
+        if (hdr && hdr.id && !e.target.closest('[data-groupselect]')) {
+          const gid = hdr.id.replace(/Hdr$/, 'Body');
+          const body = document.getElementById(gid);
+          if (body) {
+            body.style.display = (body.style.display === 'none') ? '' : 'none';
+            const arrow = hdr.querySelector('span');
+            if (arrow) arrow.textContent = (body.style.display === 'none' ? '▶ ' : '▼ ') + hdr.getAttribute('data-group');
+          }
+        }
+        // 单个 checkbox 点选 → 同步 selectedSet（支持 Shift 区间 / Ctrl 增删）
+        const cb = e.target.closest('.at-pool-cb');
+        if (cb) {
+          const allCbs = Array.from(poolEl.querySelectorAll('.at-pool-cb'));
+          const idx = allCbs.indexOf(cb);
+          const isShift = e.shiftKey;
+          const isCtrl = e.ctrlKey || e.metaKey;
+
+          if (isShift && mask._lastCbIndex >= 0 && idx >= 0) {
+            // Shift + 点击：把 lastIndex <-> 当前索引区间内的 checkbox
+            // 统一设为「当前 cb.checked 的值」（默认全选，因为 checkbox 已翻转过（因为用户这次点了 cb，浏览器会翻转，我们在区间内按"取 cb.checked 前的值 还是 后的值"？
+            // 最符合直觉：区间内全部置为 = cb.checked（即，与最后这次点击的最终状态一致）
+            const targetVal = cb.checked;
+            const lo = Math.min(mask._lastCbIndex, idx);
+            const hi = Math.max(mask._lastCbIndex, idx);
+            for (let i = lo; i <= hi; i++) {
+              const c = allCbs[i];
+              if (!c) continue;
+              c.checked = targetVal;
+              if (targetVal) selectedSet.add(c.value);
+              else selectedSet.delete(c.value);
+            }
+            mask._lastCbIndex = idx;
+            renderPool(searchEl ? searchEl.value : '');
+            return;
+          }
+
+          // 普通点击：更新集合，记录最后一次 index
+          if (cb.checked) selectedSet.add(cb.value);
+          else selectedSet.delete(cb.value);
+          if (!isCtrl) mask._lastCbIndex = idx;  // Ctrl 点不改变区间锚点
+          updateCount();
+        }
+      });
+    }
+
+    // 初始化渲染
+    renderPool('');
+
+    // 保存 aiTriggerConfig.playIds 引用（saveAiTriggerModal 从 selectedSet 读取）
+    mask._atSelectedSet = selectedSet;
+
+    // 键盘：回车确定（搜索框按回车不触发确定：除非焦点在确定按钮或回车在非textarea/input场景）
+    function _atKey(e) {
+      if (e.key === 'Enter') {
+        // 搜索框回车 → 不关闭弹窗，只搜索
+        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) {
+          return;
+        }
+        e.preventDefault(); saveAiTriggerModal();
+      } else if (e.key === 'Escape') { e.preventDefault(); closeAiTriggerModal(); }
+    }
+    document.addEventListener('keydown', _atKey);
+    mask._atKey = _atKey;
+  }
+
+  window.saveAiTriggerModal = function saveAiTriggerModal() {
+    const mask = document.getElementById('aiTriggerMask');
+    if (!mask) return;
+    const sel = mask.querySelector('#atSwitchMode');
+    if (sel) aiTriggerConfig.switchMode = sel.value;
+    const stopCb = mask.querySelector('#atStopScenesOnMusicStop');
+    if (stopCb) aiTriggerConfig.stopScenesOnMusicStop = !!stopCb.checked;
+    // 从 selectedSet 读取（包含折叠分组里的勾选项，比 querySelectorAll 更准）
+    if (mask._atSelectedSet) {
+      aiTriggerConfig.playIds = Array.from(mask._atSelectedSet);
+    } else {
+      const checks = mask.querySelectorAll('#atPool input[type=checkbox]:checked');
+      aiTriggerConfig.playIds = Array.from(checks).map(c => c.value);
+    }
+    try { localStorage.setItem('aiTriggerConfig', JSON.stringify({ switchMode: aiTriggerConfig.switchMode, playIds: aiTriggerConfig.playIds, stopScenesOnMusicStop: aiTriggerConfig.stopScenesOnMusicStop })); } catch(_) {}
+    closeAiTriggerModal();
+    // 同步配置到主窗口
+    try { ipcRenderer.send('ai-trigger-config', aiTriggerConfig); } catch(_) {}
+  }
+
+  window.closeAiTriggerModal = function closeAiTriggerModal() {
+    const mask = document.getElementById('aiTriggerMask');
+    if (mask) {
+      if (mask._atKey) document.removeEventListener('keydown', mask._atKey);
+      mask.remove();
+    }
+  }
+
+  // 初始化：加载配置 + 恢复开关状态（记忆最后状态）
+  try {
+    loadAiTriggerConfig();
+    const _atToggle = document.getElementById('aiTriggerToggle');
+    if (_atToggle) {
+      _atToggle.checked = aiTriggerConfig.enabled;
+      _atToggle.addEventListener('change', onAiTriggerToggle);
+    }
+    updateAiTriggerUI(aiTriggerConfig.enabled);
+    // 同步配置到主窗口（延迟，等主窗口就绪）
+    setTimeout(function() { try { ipcRenderer.send('ai-trigger-config', aiTriggerConfig); } catch(_) {} }, 1000);
+  } catch(_) {}
+  // ========== AI触发功能 END ==========
+
+  // ========== 新功能数据收集/恢复（被主进程转发调用，用于主窗口项目保存/加载） ==========
+  // 收集控台 localStorage 数据（主窗口保存项目时调用，主进程转发过来）
+  try {
+    ipcRenderer.on('console-collect-features', function() {
+      var out = null;
+      try {
+        var keys = [
+          'consoleShortcuts', 'consoleMusicBinds', 'consoleSceneMutex',
+          'consoleProtectedPlayIds', 'consoleMusicSyncEnabled',
+          'consoleShortcutEnabled', 'consoleConnectIp',
+          'consoleGroupOrder', 'consoleGroupCollapsed'
+        ];
+        out = {};
+        keys.forEach(function(k){
+          try { out[k] = localStorage.getItem(k); } catch(_) { out[k] = null; }
+        });
+      } catch(_) { out = null; }
+      try { ipcRenderer.send('console-features-collected', out); } catch(_) {}
+    });
+  } catch(_) {}
+
+  // 恢复控台 localStorage 数据（主窗口加载项目时调用，主进程转发过来）
+  try {
+    ipcRenderer.on('console-restore-features', function(event, data) {
+      try {
+        if (data && typeof data === 'object') {
+          Object.keys(data).forEach(function(k){
+            try {
+              var v = data[k];
+              if (v === null || v === undefined) return;
+              localStorage.setItem(k, String(v));
+            } catch(_) {}
+          });
+          // 刷新页面以应用恢复的设置（控台初始化逻辑较多，刷新最稳妥）
+          setTimeout(function(){ try { location.reload(); } catch(_) {} }, 100);
+        }
+      } catch(_) {}
+    });
+  } catch(_) {}
+
+    } catch(bootErr) {
+      // =============== 启动致命错误：直接写顶层红条，任何函数（toast/showProtoNotice）都不能依赖 ===============
+      try {
+        var errText = (bootErr && (bootErr.stack || bootErr.message) || String(bootErr) || '未知错误').toString().slice(0, 1200);
+        var banner = document.createElement('div');
+        banner.style.cssText = 'position:sticky;top:0;z-index:99999;padding:12px 18px;font-size:13px;font-weight:700;color:#7f1d1d;background:#fee2e2;border-bottom:2px solid #fca5a5;white-space:pre-wrap;word-break:break-all;';
+        banner.textContent = '⚠️ 连接控台脚本启动失败（渲染覆写/初始化阶段）。请关掉窗口后重新打开一次。\n错误详情：' + errText;
+        try {
+          if (document.body && document.body.firstChild) document.body.insertBefore(banner, document.body.firstChild);
+          else if (document.body) document.body.appendChild(banner);
+          else document.documentElement.appendChild(banner);
+        } catch(_2) {}
+        try {
+          var pill = document.getElementById('connStatus');
+          if(pill) pill.textContent = '脚本启动失败：' + (bootErr && bootErr.message || String(bootErr)).slice(0, 120);
+        } catch(_4) {}
+      } catch(_fatal) {
+        try { alert('连接控台脚本启动失败：' + (bootErr && bootErr.message || String(bootErr))); } catch(_g) {}
+      }
+    }
+  })();
+
+  // ============ 脚本加载完成确认 + 函数可用性自检 ============
+  try {
+    var _fns = ['doConnect','doDisconnect','doQueryPlaylists','doForceReloginAndQuery','openShortcutModal','sendCtrl','setConnState','renderPlaylists'];
+    var _missing = _fns.filter(function(n){ return typeof window[n] !== 'function'; });
+    if (_missing.length > 0) {
+      var b = document.createElement('div');
+      b.style.cssText = 'position:sticky;top:0;z-index:99999;padding:10px 14px;font-size:13px;font-weight:700;color:#7f1d1d;background:#fee2e2;border-bottom:2px solid #fca5a5;white-space:pre-wrap;word-break:break-all;';
+      b.textContent = '⚠️ 脚本加载完成但以下函数未挂到 window：' + _missing.join(', ') + '\n请关掉窗口重新打开。';
+      if(document.body) document.body.insertBefore(b, document.body.firstChild);
+    }
+    console.log('[ConsoleConnect] script loaded OK, functions check:', _missing.length === 0 ? 'ALL OK' : ('MISSING: ' + _missing.join(',')));
+  } catch(_) {}
+</script>
+</body>
+</html>

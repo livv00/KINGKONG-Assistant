@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大屏显示</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: black;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        #videoContainer {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background-color: black;
+        }
+        
+        /* A/B 视频层 — 绝对定位，独立控制 opacity 交叉淡入淡出 */
+        .videoLayer {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: none; /* 完全由 rAF 控制 opacity */
+        }
+        .videoLayer video {
+            max-width: 100%;
+            max-height: 100%;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background-color: transparent;
+        }
+        
+        #scrollImagesContainer {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: black;
+            opacity: 0;
+            z-index: 5;
+        }
+        
+        #scrollImagesContainer img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* 淡入淡出效果 */
+        @keyframes fadeInOut {
+            0% { opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        @keyframes slideLeft {
+            0% { transform: translateX(100%); opacity: 0; }
+            10% { transform: translateX(0); opacity: 1; }
+            90% { transform: translateX(0); opacity: 1; }
+            100% { transform: translateX(-100%); opacity: 0; }
+        }
+        @keyframes slideRight {
+            0% { transform: translateX(-100%); opacity: 0; }
+            10% { transform: translateX(0); opacity: 1; }
+            90% { transform: translateX(0); opacity: 1; }
+            100% { transform: translateX(100%); opacity: 0; }
+        }
+        @keyframes zoomIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            10% { transform: scale(1); opacity: 1; }
+            90% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+        @keyframes zoomOut {
+            0% { transform: scale(1.5); opacity: 0; }
+            10% { transform: scale(1); opacity: 1; }
+            90% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(0.5); opacity: 0; }
+        }
+        @keyframes crossFade {
+            0% { opacity: 0; }
+            50% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        
+        #noContent {
+            display: none;
+        }
+    </style>
+
+  <!-- ===== I18N 国际化（语言包 + 核心 + 初始化 + 主进程语言同步） ===== -->
+  <script src="./js/i18n/zh-CN.js"></script>
+  <script src="./js/i18n/en-US.js"></script>
+  <script src="./js/i18n/ja-JP.js"></script>
+  <script src="./js/i18n/ko-KR.js"></script>
+  <script src="./js/i18n/fr-FR.js"></script>
+  <script src="./js/i18n/de-DE.js"></script>
+  <script src="./js/i18n/es-ES.js"></script>
+  <script src="./js/i18n/ru-RU.js"></script>
+  <script src="./js/i18n.js"></script>
+  <script>
+    (function () {
+      function applyLang(code) {
+        try { localStorage.setItem('appLanguage', code || 'zh-CN'); } catch (_) {}
+        try {
+          if (window.I18N && typeof window.I18N.changeLanguage === 'function') {
+            window.I18N.changeLanguage(code || 'zh-CN');
+            if (typeof window.I18N.shutdownObserver === 'function') window.I18N.shutdownObserver();
+          }
+        } catch (_) {}
+      }
+      try {
+        const saved = localStorage.getItem('appLanguage') || 'zh-CN';
+        if (saved !== 'zh-CN') {
+          if (document.body) applyLang(saved);
+          else window.addEventListener('DOMContentLoaded', function () { applyLang(saved); });
+        }
+      } catch (_) {}
+      try {
+        require('electron').ipcRenderer.on('language-data', function (event, langCode) {
+          if (document.body) applyLang(langCode);
+          else window.addEventListener('DOMContentLoaded', function () { applyLang(langCode); });
+        });
+      } catch (_) {}
+    })();
+  </script>
+</head>
+<body>
+    <div id="videoContainer">
+        <div id="noContent"></div>
+        <!-- A/B 两层视频：用于相邻片段交叉淡入淡出 -->
+        <div class="videoLayer" id="layerA"><video id="videoA" autoplay muted playsinline></video></div>
+        <div class="videoLayer" id="layerB"><video id="videoB" autoplay muted playsinline></video></div>
+        <div id="scrollImagesContainer"></div>
+    </div>
+    
+    <script>
+        const { ipcRenderer } = require('electron');
+        
+        const layerA = document.getElementById('layerA');
+        const layerB = document.getElementById('layerB');
+        const videoA = document.getElementById('videoA');
+        const videoB = document.getElementById('videoB');
+        const scrollImagesContainer = document.getElementById('scrollImagesContainer');
+        const noContent = document.getElementById('noContent');
+        
+        let scrollImagesInterval = null;
+        let currentImageIndex = 0;
+        let scrollImagesSettings = null;
+        
+        // ===== 新轨道式播放器状态 =====
+        const program = {
+          active: false,
+          audioStartAt: 0,           // performance.now() 锚点（ms）
+          audioDuration: 0,          // 秒
+          clips: [],                 // 规范化片段：{path,name,startSec,endSec,clipInSec,clipOutSec,fadeInSec,fadeOutSec,mute,loopUntilEnd}
+        };
+        
+        // 哪个层是"正在显示"的
+        let visibleLayer = 'A'; // 当前最可见层：A 或 B
+        // 每层当前绑定的 clipId（用于避免重复加载 src）
+        const layerClip = { A: null, B: null };
+        // requestAnimationFrame handle
+        let rafHandle = null;
+        
+        function nowSec() {
+          return (performance.now() - program.audioStartAt) / 1000;
+        }
+        
+        function getLayer(l) {
+          return l === 'A' ? { el: layerA, vid: videoA } : { el: layerB, vid: videoB };
+        }
+        
+        // 把某层绑定到某个 clip 源（仅在变化时重设 src，避免跳转闪烁）
+        function bindLayerToClip(layerName, clip) {
+          const { vid } = getLayer(layerName);
+          const prev = layerClip[layerName];
+          const nxt = clip ? clip.path + '|' + clip.clipInSec + '|' + (clip.mute?'m':'u') : null;
+          if (prev !== nxt) {
+            if (!clip) {
+              vid.pause();
+              try { vid.removeAttribute('src'); vid.load(); } catch (_) {}
+            } else {
+              vid.src = clip.path;
+              vid.muted = !!clip.mute;
+              vid.loop = !!clip.loopUntilEnd;
+            }
+            layerClip[layerName] = nxt;
+          }
+        }
+        
+        function setLayerOpacity(layerName, op) {
+          const { el } = getLayer(layerName);
+          el.style.opacity = String(Math.max(0, Math.min(1, op)));
+        }
+        
+        // 确保指定层正在以 clip.clipInSec + (t - clip.startSec) 的位置播放
+        function syncLayerToTime(layerName, clip, t) {
+          const { vid } = getLayer(layerName);
+          if (!clip) return;
+          const localT = t - clip.startSec; // 相对片段开始
+          let targetLocal;
+          if (clip.loopUntilEnd) {
+            const clipLen = (clip.clipOutSec != null ? clip.clipOutSec : clip.duration || 0) - clip.clipInSec;
+            if (clipLen > 0 && localT >= 0) {
+              targetLocal = clip.clipInSec + (localT % clipLen);
+            } else {
+              targetLocal = clip.clipInSec + Math.max(0, localT);
+            }
+          } else {
+            targetLocal = clip.clipInSec + Math.max(0, localT);
+            const out = clip.clipOutSec != null ? clip.clipOutSec : (clip.duration || targetLocal);
+            if (targetLocal > out) targetLocal = out;
+          }
+          // seek 节流：相差 > 0.25s 才 seek，避免抖动
+          if (isNaN(vid.duration)) return; // 元数据还没好，先不 seek
+          const diff = Math.abs(vid.currentTime - targetLocal);
+          if (diff > 0.25) {
+            try { vid.currentTime = targetLocal; } catch (_) {}
+          }
+        }
+        
+        // 找到当前时间覆盖的片段（按 startSec 排序），以及相邻片段用于交叉淡入
+        function findActiveClips(t) {
+          const res = [];
+          for (const c of program.clips) {
+            if (t >= c.startSec && t < c.endSec) res.push(c);
+          }
+          // 若两条同时覆盖（极端重叠），取 startSec 大的（后放置的在上），然后再选另一条用于过渡
+          res.sort((a,b) => b.startSec - a.startSec);
+          return res.slice(0, 2);
+        }
+        
+        function computeClipOpacity(clip, t) {
+          const fi = Math.max(0, clip.fadeInSec || 0);
+          const fo = Math.max(0, clip.fadeOutSec || 0);
+          let op = 1;
+          if (fi > 0) op = Math.min(op, (t - clip.startSec) / fi);
+          if (fo > 0) op = Math.min(op, (clip.endSec - t) / fo);
+          return Math.max(0, Math.min(1, op));
+        }
+        
+        function tick() {
+          rafHandle = null;
+          if (!program.active) return;
+          const t = nowSec();
+          
+          // 超过音频时长 → 结束 program
+          if (program.audioDuration > 0 && t >= program.audioDuration + 2) {
+            stopProgramInternal();
+            return;
+          }
+          
+          const actives = findActiveClips(t);
+          if (actives.length === 0) {
+            // 黑屏：两层都隐藏
+            setLayerOpacity('A', 0);
+            setLayerOpacity('B', 0);
+            bindLayerToClip('A', null);
+            bindLayerToClip('B', null);
+          } else {
+            // 主片段 = 当前最应该展示的
+            const top = actives[0];
+            const sub = actives[1] || null;
+            const topOp = computeClipOpacity(top, t);
+            
+            // 将 top 分配到可见层，切换到可见层
+            // 简单策略：把 top 放在 visibleLayer 上；若 sub 存在（重叠过渡段）则把 sub 放在另一层
+            const topLayer = visibleLayer;
+            const subLayer = visibleLayer === 'A' ? 'B' : 'A';
+            
+            bindLayerToClip(topLayer, top);
+            // 仅在视频暂停时才调 play()，避免每帧创建 Promise 开销
+            var _topVid = getLayer(topLayer).vid;
+            if (_topVid.paused) { try { _topVid.play().catch(() => {}); } catch(_) {} }
+            syncLayerToTime(topLayer, top, t);
+            setLayerOpacity(topLayer, topOp);
+            
+            if (sub && top.fadeInSec > 0 && (t - top.startSec) < top.fadeInSec + 0.05) {
+              // 进入段，sub 是上一条
+              bindLayerToClip(subLayer, sub);
+              var _subVid = getLayer(subLayer).vid;
+              if (_subVid.paused) { try { _subVid.play().catch(() => {}); } catch(_) {} }
+              syncLayerToTime(subLayer, sub, t);
+              setLayerOpacity(subLayer, computeClipOpacity(sub, t));
+            } else {
+              setLayerOpacity(subLayer, 0);
+            }
+          }
+          
+          rafHandle = requestAnimationFrame(tick);
+        }
+        
+        function normalizeClips(clips) {
+          return (clips || []).map(c => ({
+            id: c.id || String(Math.random()),
+            path: c.path || '',
+            name: c.name || '',
+            startSec: Math.max(0, Number(c.startSec) || 0),
+            endSec: Math.max(0.1, Number(c.endSec) || 1),
+            clipInSec: Math.max(0, Number(c.clipInSec) || 0),
+            clipOutSec: (c.clipOutSec == null) ? null : Math.max(0, Number(c.clipOutSec)),
+            fadeInSec: Math.max(0, Number(c.fadeInSec) || 0),
+            fadeOutSec: Math.max(0, Number(c.fadeOutSec) || 0),
+            mute: c.mute !== false,
+            loopUntilEnd: !!c.loopUntilEnd,
+            duration: Number(c.duration) || 0,
+          })).filter(c => c.path).sort((a,b) => a.startSec - b.startSec);
+        }
+        
+        function startProgram(payload) {
+          // 停止滚动图片
+          stopScrollImages();
+          // 先停掉旧 program
+          stopProgramInternal();
+          
+          program.active = true;
+          var seekSec = Math.max(0, Number(payload.previewSeekSec) || 0);
+          // audioStartAt 以 performance.now() 为基准：若 seekSec=5，则"5秒前"作为起点，t = (now - audioStartAt)/1000 自然为 5 + 真实流逝
+          program.audioStartAt = performance.now() - seekSec * 1000;
+          program.audioDuration = Math.max(0, Number(payload.audioDuration) || 0);
+          program.clips = normalizeClips(payload.clips);
+          
+          if (program.clips.length === 0) {
+            // 没素材 → 直接隐藏两层，不进入 rAF 循环
+            setLayerOpacity('A', 0);
+            setLayerOpacity('B', 0);
+            bindLayerToClip('A', null);
+            bindLayerToClip('B', null);
+            program.active = false;
+            return;
+          }
+          
+          visibleLayer = 'A';
+          rafHandle = requestAnimationFrame(tick);
+        }
+        
+        function stopProgramInternal() {
+          program.active = false;
+          if (rafHandle) { cancelAnimationFrame(rafHandle); rafHandle = null; }
+          setLayerOpacity('A', 0);
+          setLayerOpacity('B', 0);
+          try { videoA.pause(); } catch(_) {}
+          try { videoB.pause(); } catch(_) {}
+          try { videoA.removeAttribute('src'); videoA.load(); } catch(_) {}
+          try { videoB.removeAttribute('src'); videoB.load(); } catch(_) {}
+          layerClip.A = null;
+          layerClip.B = null;
+        }
+        
+        // ===== 旧 playVideo 兼容：转为单 clip 的 program =====
+        function playVideoCompat(videoPath, loop = true) {
+          if (!videoPath) {
+            stopProgramInternal();
+            return;
+          }
+          startProgram({
+            audioDuration: 86400, // 相当于"无限"直到 stop
+            clips: [{
+              id: 'legacy_' + Date.now(),
+              path: videoPath,
+              name: '',
+              startSec: 0,
+              endSec: 1e9,
+              clipInSec: 0,
+              clipOutSec: null,
+              fadeInSec: 0.3,
+              fadeOutSec: 0.3,
+              mute: true,
+              loopUntilEnd: !!loop,
+            }],
+          });
+        }
+        
+        function playVideo(videoPath, loop) {
+          playVideoCompat(videoPath, loop);
+        }
+        
+        function stopVideo() {
+          stopProgramInternal();
+        }
+        
+        // ===== 滚动图片播放（预加载 + 双缓冲优化） =====
+        // 预加载缓存：Image 对象缓存，避免每次从磁盘解码
+        const imagePreloadCache = {};
+        let _preloadBusy = false;
+
+        // 后台预加载一批图片（优先加载当前 + 后面 3 张）
+        function preloadImages(images, fromIndex) {
+          if (_preloadBusy) return;
+          _preloadBusy = true;
+          // 用 setTimeout 让出主线程，不阻塞当前帧渲染
+          setTimeout(function() {
+            var count = 0;
+            for (var i = 0; i < 4 && count < 4; i++) {
+              var idx = (fromIndex + i) % images.length;
+              if (!imagePreloadCache[idx] && images[idx]) {
+                var pre = new Image();
+                pre.onload = function() { /* decoded into cache */ };
+                pre.onerror = function() { /* skip broken */ };
+                pre.src = images[idx];
+                imagePreloadCache[idx] = pre;
+                count++;
+              }
+            }
+            _preloadBusy = false;
+          }, 16);
+        }
+
+        // 双缓冲：两个 img 元素交替使用，避免 innerHTML='' + createElement 开销
+        var _imgBufA = null, _imgBufB = null, _curBuf = 'A';
+
+        function getBuffer() {
+          if (!_imgBufA) {
+            _imgBufA = document.createElement('img');
+            _imgBufB = document.createElement('img');
+            _imgBufA.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none;';
+            _imgBufB.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none;';
+            scrollImagesContainer.appendChild(_imgBufA);
+            scrollImagesContainer.appendChild(_imgBufB);
+          }
+          return _curBuf === 'A' ? _imgBufA : _imgBufB;
+        }
+        function getOtherBuffer() {
+          return _curBuf === 'A' ? _imgBufB : _imgBufA;
+        }
+
+        function playScrollImages(settings) {
+          if (!settings || !settings.images || settings.images.length === 0) return;
+          // 停止视频（轨道式 + 旧视频）
+          stopProgramInternal();
+          // 清空预加载缓存（新歌曲的图片路径不同）
+          for (var k in imagePreloadCache) delete imagePreloadCache[k];
+          scrollImagesContainer.style.display = 'flex';
+          scrollImagesContainer.style.opacity = '1';
+          scrollImagesSettings = settings;
+          currentImageIndex = 0;
+          if (scrollImagesInterval) clearInterval(scrollImagesInterval);
+          // 首批预加载
+          preloadImages(settings.images, 0);
+          playNextImage();
+          scrollImagesInterval = setInterval(function() { playNextImage(); }, settings.transitionTime * 1000);
+        }
+
+        function playNextImage() {
+          if (!scrollImagesSettings || !scrollImagesSettings.images || scrollImagesSettings.images.length === 0) return;
+          var src = scrollImagesSettings.images[currentImageIndex];
+          // 预加载下一批（当前 + 后 3 张）
+          preloadImages(scrollImagesSettings.images, currentImageIndex);
+
+          // 用双缓冲：当前 buf 隐藏，另一个 buf 显示新图
+          var showBuf = getOtherBuffer();
+          showBuf.src = src;
+          // 重置动画
+          showBuf.style.animation = 'none';
+          // 强制 reflow 让 animation: none 生效
+          void showBuf.offsetWidth;
+          applyTransitionEffect(showBuf, scrollImagesSettings.transitionMode);
+          showBuf.style.display = 'block';
+          // 隐藏旧 buf
+          getBuffer().style.display = 'none';
+          // 切换当前 buf
+          _curBuf = _curBuf === 'A' ? 'B' : 'A';
+
+          currentImageIndex++;
+          if (currentImageIndex >= scrollImagesSettings.images.length) {
+            if (scrollImagesSettings.loop) {
+              currentImageIndex = 0;
+            } else {
+              stopScrollImages();
+              return;
+            }
+          }
+        }
+        
+        function applyTransitionEffect(img, transitionMode) {
+          const t = scrollImagesSettings.transitionTime;
+          switch (transitionMode) {
+            case 'fade': img.style.animation = 'fadeInOut ' + t + 's ease-in-out'; break;
+            case 'slide-left': img.style.animation = 'slideLeft ' + t + 's ease-in-out'; break;
+            case 'slide-right': img.style.animation = 'slideRight ' + t + 's ease-in-out'; break;
+            case 'zoom-in': img.style.animation = 'zoomIn ' + t + 's ease-in-out'; break;
+            case 'zoom-out': img.style.animation = 'zoomOut ' + t + 's ease-in-out'; break;
+            case 'cross-fade': img.style.animation = 'crossFade ' + t + 's ease-in-out'; break;
+            default: img.style.animation = 'fadeInOut ' + t + 's ease-in-out';
+          }
+        }
+        
+        function stopScrollImages() {
+          if (scrollImagesInterval) { clearInterval(scrollImagesInterval); scrollImagesInterval = null; }
+          // 隐藏双缓冲 img，移除 src 释放解码后的图像内存
+          if (_imgBufA) { _imgBufA.style.display = 'none'; _imgBufA.removeAttribute('src'); }
+          if (_imgBufB) { _imgBufB.style.display = 'none'; _imgBufB.removeAttribute('src'); }
+          // 清空预加载缓存
+          for (var k in imagePreloadCache) delete imagePreloadCache[k];
+          scrollImagesContainer.style.display = 'none';
+          scrollImagesContainer.style.opacity = '0';
+        }
+        
+        // ===== IPC 事件 =====
+        // 新消息：轨道式多片段
+        ipcRenderer.on('play-big-screen-program', (event, payload) => {
+          try { startProgram(payload || {}); } catch (e) { console.warn('play-big-screen-program fail:', e); }
+        });
+        ipcRenderer.on('stop-big-screen-program', () => {
+          stopProgramInternal();
+        });
+        // BS-10：主窗口进度条 seek 时，轻量调整 program 时间轴，不重新加载视频片段
+        ipcRenderer.on('seek-big-screen-program', (event, payload) => {
+          if (!program.active) return;
+          var seekSec = Math.max(0, Number(payload && payload.seekSec) || 0);
+          program.audioStartAt = performance.now() - seekSec * 1000;
+          // 重置 rAF 中 layerClip 缓存，使 currentTime 立即重新应用到两个 video 元素
+          layerClip.A = null; layerClip.B = null;
+          if (!rafHandle) rafHandle = requestAnimationFrame(tick);
+        });
+        
+        // 旧消息（兼容）
+        ipcRenderer.on('playVideo', (event, data) => {
+          if (typeof data === 'object' && data && data.videoPath) {
+            playVideo(data.videoPath, data.loop);
+          } else {
+            playVideo(data);
+          }
+        });
+        ipcRenderer.on('stopVideo', () => {
+          stopVideo();
+        });
+        ipcRenderer.on('playScrollImages', (event, settings) => {
+          playScrollImages(settings);
+        });
+        ipcRenderer.on('stopScrollImages', () => {
+          stopScrollImages();
+        });
+        
+        // ===== 恢复渲染 =====
+        let lastVideoState = { path: null, loop: true, wasPlaying: false };
+        function saveVideoState() {
+          const v = (visibleLayer === 'A') ? videoA : videoB;
+          lastVideoState.wasPlaying = !v.paused && !v.ended && v.src;
+          lastVideoState.path = v.src;
+          lastVideoState.loop = v.loop;
+        }
+        ipcRenderer.on('force-restore-render', () => {
+          console.log('[restore] 收到恢复渲染通知');
+          // 如果轨道式 program 正在运行，重新触发 rAF 与两层 play
+          if (program.active) {
+            try { videoA.play().catch(() => {}); } catch(_) {}
+            try { videoB.play().catch(() => {}); } catch(_) {}
+            if (!rafHandle) rafHandle = requestAnimationFrame(tick);
+          } else {
+            // 兼容旧状态：哪一层有 src 就重启播放
+            if (videoA.src && layerA.style.opacity !== '0') {
+              try { videoA.play().catch(() => {}); } catch(_) {}
+            }
+            if (videoB.src && layerB.style.opacity !== '0') {
+              try { videoB.play().catch(() => {}); } catch(_) {}
+            }
+          }
+          if (scrollImagesSettings && scrollImagesSettings.images && scrollImagesSettings.images.length > 0) {
+            if (!scrollImagesInterval) playScrollImages(scrollImagesSettings);
+          }
+        });
+        
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) {
+            if (program.active) {
+              try { videoA.play().catch(() => {}); } catch(_) {}
+              try { videoB.play().catch(() => {}); } catch(_) {}
+              if (!rafHandle) rafHandle = requestAnimationFrame(tick);
+            } else {
+              if (videoA.src && layerA.style.opacity !== '0' && videoA.paused) videoA.play().catch(() => {});
+              if (videoB.src && layerB.style.opacity !== '0' && videoB.paused) videoB.play().catch(() => {});
+            }
+          }
+        });
+    </script>
+</body>
+</html>
