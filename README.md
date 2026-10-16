@@ -1,6 +1,6 @@
 <div align="center">
 
-# 金刚助手 · Jingang Assistant
+# 金刚助手 · KINGKONG Assistant
 
 **面向直播 / 现场演出的一站式音频与灯光控制客户端**
 
